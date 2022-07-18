@@ -1,5 +1,5 @@
 {
-  "name": "ts-indian-rummy",
+  "name": "@mudont/rummy-core",
   "version": "0.0.1",
   "description": "Typescript library for Indian Rummy Card game",
   "main": "index.js",
@@ -9,7 +9,7 @@
     "test": "jest"
   },
   "keywords": [],
-  "author": "",
+  "author": "Mu Dont",
   "license": "ISC",
   "devDependencies": {
     "@types/assert": "^1.5.6",
@@ -25,5 +25,13 @@
     "debug": "^4.3.4",
     "fp-ts": "^2.12.1",
     "ramda": "^0.28.0"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mudont/rummy-core.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mudont/rummy-core/issues"
+  },
+  "homepage": "https://github.com/mudont/rummy-core#readme"
 }
