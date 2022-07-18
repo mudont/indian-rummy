@@ -26,7 +26,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.checkHand = exports.makeMove = exports.playerFinished = exports.dealFromDeck = exports.makeGame = exports.newPlayer = exports.meldedHandMatchesHand = exports.computePoints = exports.enumerateMeldedHand = exports.makeMeldedHand = exports.makeLife = exports.makeTriplet = exports.makeSequence = exports.GAMES = void 0;
+exports.checkHand = exports.makeMove = exports.playerFinished = exports.dealFromDeck = exports.makeGame = exports.newPlayer = exports.meldedHandMatchesHand = exports.computePoints = exports.enumerateMeldedHand = exports.makeMeldedHand = exports.makeLife = exports.makeTriplet = exports.makeSequence = exports.cardsInSequence = void 0;
 const assert_1 = __importDefault(require("assert"));
 const R = __importStar(require("ramda"));
 const types_1 = require("./types");
@@ -34,13 +34,22 @@ const debug_1 = __importDefault(require("debug"));
 const card_1 = require("./card");
 const util_1 = require("./util");
 const debug = (0, debug_1.default)("app:cards");
-exports.GAMES = [];
+// export const GAMES: IGame[] = [];
 const MIDDLE_DROP_POINTS = 50;
 const INITIAL_DROP_POINTS = 25;
 const FULL_COUNT_POINTS = 80;
 /************************************************************
  * Core Game functions
  ************************************************************/
+/**
+ * Get list of cards in a sequence
+ * @param {ISequence} seq
+ * @returns Card[]
+ */
+function cardsInSequence(seq) {
+    return R.map((r) => new types_1.Card(seq.suit, r))(seq.ranks);
+}
+exports.cardsInSequence = cardsInSequence;
 /**
  * Get the view of Game that the player is allowed to see
  * Player is not allowed to see the deck and other players' hands
@@ -200,8 +209,8 @@ function enumerateMeldedHand(meldedHand) {
     if (!meldedHand.life) {
         return jokers;
     }
-    const lifeCards = meldedHand.life ? (0, util_1.cardsInSequence)(meldedHand.life) : [];
-    const sequenceCards = R.flatten(R.map(util_1.cardsInSequence, (_c = meldedHand.sequences) !== null && _c !== void 0 ? _c : []));
+    const lifeCards = meldedHand.life ? cardsInSequence(meldedHand.life) : [];
+    const sequenceCards = R.flatten(R.map(cardsInSequence, (_c = meldedHand.sequences) !== null && _c !== void 0 ? _c : []));
     // If no second sequence after Life,
     // can't use triplets to save points
     if (sequenceCards.length <= 0) {
@@ -257,7 +266,7 @@ exports.newPlayer = newPlayer;
  * @param currUser
  * @returns
  */
-function makeGame(playerIds, currUser) {
+function makeGame(playerIds, currUser, gameStore) {
     const numPlayers = playerIds.length;
     const minCards = numPlayers * 13 + 10;
     const nDecks = Math.ceil(minCards / 54);
@@ -268,24 +277,14 @@ function makeGame(playerIds, currUser) {
     const mergedDeck = (0, card_1.mergeDecks)(decks);
     const [usedDeck, hands, openCard, joker] = (0, exports.dealFromDeck)(mergedDeck, numPlayers, 13);
     const players = R.map((u) => newPlayer(u), playerIds);
-    const id = exports.GAMES.length;
-    const game = {
-        id,
-        state: types_1.GameState.Active,
-        deck: usedDeck,
-        hands,
-        melds: [],
-        openPile: [openCard],
-        currJoker: joker,
-        players,
-        turnPlayer: players[0],
-        moves: [],
-    };
-    exports.GAMES.push(game);
-    const userIdx = R.findIndex(R.propEq("user", currUser), game.players);
-    return getRestrictedView(game, userIdx);
+    const id = GAMES.length;
+    const game = id, state, deck, hands, melds, openPile, currJoker, players, turnPlayer, moves;
 }
 exports.makeGame = makeGame;
+;
+GAMES.push(game);
+const userIdx = R.findIndex(R.propEq("user", currUser), game.players);
+return getRestrictedView(game, userIdx);
 /**
  * Shuffle given and deal 13 cards to each player
  * @param deck
@@ -325,7 +324,7 @@ exports.playerFinished = playerFinished;
  * @returns
  */
 function makeMove(gameId, user, move) {
-    const game = exports.GAMES[gameId];
+    const game = GAMES[gameId];
     if (!game) {
         return Error(`Invalid Game id ${gameId}`);
     }
@@ -418,7 +417,7 @@ exports.makeMove = makeMove;
  * @returns melded hand
  */
 function checkHand(gameId, hand) {
-    const game = exports.GAMES[gameId];
+    const game = GAMES[gameId];
     if (!game) {
         return Error(`Invalid Game id ${gameId}`);
     }

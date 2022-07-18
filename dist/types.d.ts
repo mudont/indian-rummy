@@ -1,3 +1,4 @@
+import * as TE from "fp-ts/lib/TaskEither";
 export declare enum Suit {
     Clubs = "C",
     Diamonds = "D",
@@ -115,8 +116,14 @@ export interface IGame {
     players: IPlayer[];
     moves: IMove[];
 }
+export declare type CreateGameInput = Omit<IGame, "id">;
 export declare type GameRestricted = Omit<IGame, "deck" | "players"> & {
     myHand?: Hand;
     myMeld?: IMeldedHand;
     players: RestrictedPlayer[];
 };
+export interface IGameStore {
+    createGame: (game: CreateGameInput) => TE.TaskEither<Error, IGame>;
+    saveGame: (game: IGame) => TE.TaskEither<Error, IGame>;
+    loadGame: (gameId: number) => TE.TaskEither<Error, IGame>;
+}

@@ -23,26 +23,12 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.setDiff = exports.cardsInSequence = exports.sum = exports.hasDuplicates = void 0;
+exports.hasDuplicates = exports.setDiff = exports.sum = void 0;
 const R = __importStar(require("ramda"));
-const types_1 = require("./types");
-/**
- * Check if given generic array has duplicate elements
- * @param array
- * @returns
- */
-function hasDuplicates(array) {
-    return new Set(array).size !== array.length;
-}
-exports.hasDuplicates = hasDuplicates;
 /**
  * sum array of numbers
  */
 exports.sum = R.reduce((tot, elem) => tot + elem, 0);
-function cardsInSequence(seq) {
-    return R.map((r) => new types_1.Card(seq.suit, r))(seq.ranks);
-}
-exports.cardsInSequence = cardsInSequence;
 /**
  * Set difference
  * @param a
@@ -53,3 +39,12 @@ function setDiff(a, b) {
     return new Set(Array.from(a).filter((item) => !b.has(item)));
 }
 exports.setDiff = setDiff;
+/**
+ * Check if given generic array has duplicate elements
+ * @param array
+ * @returns
+ */
+function hasDuplicates(arr) {
+    return new Set(arr).size !== arr.length;
+}
+exports.hasDuplicates = hasDuplicates;

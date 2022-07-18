@@ -21,6 +21,7 @@ export const getRankOrdinal = (rank: Rank): number => {
  * Get a random card
  * @returns 2 char string representing the card
  */
+// eslint-disable-next-line functional/functional-parameters
 export function getRandomCard(): string {
   const suits = Array.from("CDHS");
   const ranks = Array.from("A23456789TJQK");

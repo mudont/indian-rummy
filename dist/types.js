@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.GameState = exports.Card = exports.MoveType = exports.PlayerStatus = exports.Rank = exports.Suit = void 0;
+//import * as IOEither from "fp-ts/lib/IOEither";
 // ♣♦♥♠  ♧♢♡♤
 var Suit;
 (function (Suit) {

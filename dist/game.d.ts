@@ -1,5 +1,13 @@
-import { Card, Deck, GameRestricted, Hand, IGame, ILife, IMeldedHand, IMove, IPlayer, ISequence, ITriplet, UserId } from "./types";
-export declare const GAMES: IGame[];
+import { Card, Deck, GameRestricted, Hand, IGame, IGameStore, ILife, IMeldedHand, IMove, IPlayer, ISequence, ITriplet, UserId } from "./types";
+/************************************************************
+ * Core Game functions
+ ************************************************************/
+/**
+ * Get list of cards in a sequence
+ * @param {ISequence} seq
+ * @returns Card[]
+ */
+export declare function cardsInSequence(seq: ISequence | ILife): Card[];
 /**
  * Make a Rummy sequence from cards in context of game (to know currentJoker)
  * @param game
@@ -60,7 +68,7 @@ export declare function newPlayer(user: UserId): IPlayer;
  * @param currUser
  * @returns
  */
-export declare function makeGame(playerIds: UserId[], currUser: UserId): GameRestricted;
+export declare function makeGame(playerIds: UserId[], currUser: UserId, gameStore?: IGameStore): GameRestricted;
 /**
  * Shuffle given and deal 13 cards to each player
  * @param deck
