@@ -1,15 +1,13 @@
 import {
-  makeDeck,
   makeGame,
   makeMove,
   dealFromDeck,
-  mergeDecks,
   makeSequence,
-  makeCard,
   makeLife,
   makeTriplet,
-  GameRestricted,
-} from "./cards";
+} from "./game";
+import { makeDeck, mergeDecks, makeCard } from "./card";
+import { GameRestricted } from "./types";
 import Dbg from "debug";
 const debug = Dbg("app:test");
 
@@ -33,11 +31,11 @@ const game: GameRestricted = makeGame(
   "Murali"
 );
 
-// debug(
-//   `hands=${JSON.stringify(hands)};\n\n Remaining= ${JSON.stringify(
-//     remaining
-//   )};\n\n open = ${JSON.stringify(openCard)} ${remaining.length}`
-// );
+debug(
+  `hands=${JSON.stringify(hands)};\n\n Remaining= ${JSON.stringify(
+    remaining
+  )};\n\n open = ${JSON.stringify(openCard)} ${remaining.length}`
+);
 
 [
   makeSequence(game, ["H9", "H8", "HT"].map(makeCard)),
@@ -56,6 +54,7 @@ const game: GameRestricted = makeGame(
   makeSequence(game, ["H2", "HQ", "HT"].map(makeCard)),
   makeSequence(game, ["H9", "HQ", "HT"].map(makeCard)),
 ].forEach((s, i) => {
+  debug(`${JSON.stringify(s)}`);
   assert(s instanceof Error);
 });
 [

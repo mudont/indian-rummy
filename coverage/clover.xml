@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<coverage generated="1658101673953" clover="3.2.0">
+  <project timestamp="1658101673953" name="All files">
+    <metrics statements="6" coveredstatements="6" conditionals="0" coveredconditionals="0" methods="4" coveredmethods="4" elements="10" coveredelements="10" complexity="0" loc="6" ncloc="6" packages="1" files="1" classes="1"/>
+    <file name="util.ts" path="/Users/murali/proj/js/ts-indian-rummy/src/util.ts">
+      <metrics statements="6" coveredstatements="6" conditionals="0" coveredconditionals="0" methods="4" coveredmethods="4"/>
+      <line num="1" count="1" type="stmt"/>
+      <line num="7" count="2" type="stmt"/>
+      <line num="15" count="1" type="stmt"/>
+      <line num="16" count="6" type="stmt"/>
+      <line num="24" count="1" type="stmt"/>
+      <line num="25" count="2" type="stmt"/>
+    </file>
+  </project>
+</coverage>

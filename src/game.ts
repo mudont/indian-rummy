@@ -1,212 +1,58 @@
 import assert from "assert";
 import * as R from "ramda";
+import {
+  Card,
+  Deck,
+  GameRestricted,
+  GameState,
+  Hand,
+  IGame,
+  IGameStore,
+  ILife,
+  IMeldedHand,
+  IMove,
+  IPlayer,
+  ISequence,
+  ITriplet,
+  MoveType,
+  NonJokerRank,
+  NonJokerSuit,
+  PlayerStatus,
+  Rank,
+  Suit,
+  UserId,
+} from "./types";
 import Dbg from "debug";
+import {
+  gamePlayersLens,
+  isJoker,
+  getRankOrdinal,
+  pointsOfCard,
+  makeDeck,
+  mergeDecks,
+  shuffleDeck,
+} from "./card";
+import { hasDuplicates, sum, setDiff } from "./util";
 const debug = Dbg("app:cards");
-export const GAMES: IGame[] = [];
+
+// export const GAMES: IGame[] = [];
 const MIDDLE_DROP_POINTS = 50;
 const INITIAL_DROP_POINTS = 25;
 const FULL_COUNT_POINTS = 80;
 
-// ♣♦♥♠  ♧♢♡♤
-export enum Suit {
-  Clubs = "C",
-  Diamonds = "D",
-  Hearts = "H",
-  Spades = "S",
-  Joker = "J",
-}
-
-export enum Rank {
-  Ace = "A",
-  One = "1", // for Joker
-  Two = "2",
-  Three = "3",
-  Four = "4",
-  Five = "5",
-  Six = "6",
-  Seven = "7",
-  Eight = "8",
-  Nine = "9",
-  Ten = "T",
-  Jack = "J",
-  Queen = "Q",
-  King = "K",
-}
-
-export enum PlayerStatus {
-  Active,
-  OwesCard,
-  Dropped,
-  Won,
-  Lost,
-}
-
-export enum MoveType {
-  Drop,
-  TakeOpen,
-  TakeFromDeck,
-  ReturnExtraCard,
-  Meld,
-  Show,
-  Finish,
-}
-
-export class Card {
-  suit: Suit;
-  rank: Rank;
-  constructor(s: Suit, r: Rank) {
-    this.suit = s;
-    this.rank = r;
-  }
-  toJSON() {
-    return this.suit + this.rank;
-  }
-  serialize() {
-    return this.toJSON();
-  }
-}
-
-export type UserId = string;
-
-export type Hand = Card[];
-
-type NonJokerSuit = Omit<Suit, Suit.Joker>;
-type NonJokerRank = Omit<Rank, Rank.One>;
-export interface ISequence {
-  suit: NonJokerSuit;
-  ranks: NonJokerRank[];
-  numJokers: number;
-}
-export interface ILife {
-  suit: NonJokerSuit;
-  ranks: NonJokerRank[];
-}
-
-export interface ITriplet {
-  rank: Rank;
-  suits: NonJokerSuit[];
-  numJokers: number;
-}
-
-export interface IMeldedHand {
-  life?: ILife;
-  triplets?: ITriplet[];
-  sequences?: ISequence[];
-}
-
-export type Pile = Card[];
-
-export type Deck = Card[];
-
-export interface IPlayer {
-  user: UserId;
-  status: PlayerStatus;
-  points: number;
-  moved: boolean;
-  hand: Hand;
-  meld: IMeldedHand;
-}
-export type RestrictedPlayer = Omit<IPlayer, "hand"|"meld">
-export interface IMoveSimple {
-  moveType:
-    | MoveType.Drop
-    | MoveType.TakeFromDeck
-    | MoveType.TakeOpen
-    | MoveType.Finish;
-  player: UserId;
-}
-export interface IMoveShow {
-  moveType: MoveType.Show;
-  player: UserId;
-  meldedHand: IMeldedHand;
-}
-export interface IMoveMeld {
-  moveType: MoveType.Meld;
-  player: UserId;
-  meldedHand: IMeldedHand;
-}
-export interface IMoveReturnCard {
-  moveType: MoveType.ReturnExtraCard;
-  player: UserId;
-  cardDiscarded: Card;
-}
-type IMove = IMoveSimple | IMoveShow | IMoveReturnCard | IMoveMeld;
-export enum GameState {
-  Active,
-  Finished,
-}
+/************************************************************
+ * Core Game functions
+ ************************************************************/
 /**
- * Represents a Rummy game
+ * Get list of cards in a sequence
+ * @param {ISequence} seq
+ * @returns Card[]
  */
-export interface IGame {
-  id: number;
-  state: GameState;
-  deck: Deck;
-  openPile: Card[];
-  currJoker: Card;
-  turnPlayer: IPlayer;
-  players: IPlayer[];
-  moves: IMove[];
+export function cardsInSequence(seq: ISequence | ILife): Card[] {
+  return R.map((r: NonJokerRank) => new Card(seq.suit as Suit, r as Rank))(
+    seq.ranks
+  );
 }
- 
-export type GameRestricted = Omit<IGame, "deck" | "players"> & {
-  myHand?: Hand;
-  myMeld?: IMeldedHand;
-  players: RestrictedPlayer[];
-};
-
-//-------------------------------=============================================
-/**
- *
- * @param game
- * @returns a function that takes a card and determines if that card is a joker for this game
- */
-const isJoker =
-  (game: GameRestricted) =>
-  (card: Card): boolean =>
-    card === game.currJoker || card.suit === Suit.Joker;
-
-/**
- * Get sortable integer value for given Card Rank
- * @param rank
- * @returns integer
- */
-const getRankOrdinal = (rank: Rank): number => {
-  return Object.values(Rank).indexOf(rank);
-};
-/**
- * Check if given generic array has duplicate elements
- * @param array
- * @returns
- */
-function hasDuplicates(array: any[]): boolean {
-  return new Set(array).size !== array.length;
-}
-/**
- * Get a random card
- * @returns 2 char string representing the card
- */
-export function getRandomCard(): string {
-  const suits = Array.from("CDHS");
-  const ranks = Array.from("A23456789TJQK");
-  const s = suits[Math.floor(Math.random() * suits.length)];
-  const r = ranks[Math.floor(Math.random() * ranks.length)];
-
-  return s + r;
-}
-
-/**
- * Make a Card from a two character string containing suit and rank
- * @param cardStr
- * @returns
- */
-export function makeCard(cardStr: string): Card {
-  assert(cardStr.length === 2);
-  return new Card(cardStr[0] as Suit, cardStr[1] as Rank);
-}
-export const deserializeCard = makeCard;
-
-export const gamePlayersLens = R.lens(R.prop('players')<any>, R.assoc('players'))
 /**
  * Get the view of Game that the player is allowed to see
  * Player is not allowed to see the deck and other players' hands
@@ -215,15 +61,17 @@ export const gamePlayersLens = R.lens(R.prop('players')<any>, R.assoc('players')
  * @returns
  */
 function getRestrictedView(game: IGame, playerIdx: number) {
-  const restrictedPlayers = R.map(R.omit(["hand", "meld"]))(game.players)
+  const restrictedPlayers = R.map(R.omit(["hand", "meld"]))(game.players);
   const limitedGame = R.set(gamePlayersLens, restrictedPlayers, game);
   const gameRestricted: GameRestricted = R.omit(
     ["deck"],
     limitedGame as GameRestricted
   );
 
-  gameRestricted["myHand"] = playerIdx >= 0 ? game.players[playerIdx].hand : undefined;
-  gameRestricted["myMeld"] = playerIdx >= 0 ? game.players[playerIdx].meld : undefined;
+  gameRestricted["myHand"] =
+    playerIdx >= 0 ? game.players[playerIdx].hand : undefined;
+  gameRestricted["myMeld"] =
+    playerIdx >= 0 ? game.players[playerIdx].meld : undefined;
   return gameRestricted;
 }
 
@@ -241,9 +89,9 @@ export function makeSequence(
   if (numCards < 3) {
     return Error("Too Few Cards");
   }
-  const nonJokers = cards.filter(isJoker(game));
+  const nonJokers = cards.filter((c) => !isJoker(game.currJoker)(c));
   const numJokers = numCards - nonJokers.length;
-
+  debug(`nonJokers=${JSON.stringify(nonJokers)}`);
   if (!R.all((a: Card) => a.suit === nonJokers[0].suit)(nonJokers)) {
     return Error("Sequence can't have different suits");
   }
@@ -279,6 +127,7 @@ export function makeSequence(
   }
   return { suit: nonJokers[0].suit, ranks, numJokers };
 }
+
 /**
  * Make a Triplet from given cards in context of game
  * @param game
@@ -293,7 +142,7 @@ export function makeTriplet(
   if (numCards < 3 || numCards > 4) {
     return Error("Triplet must have 3 or 4 Cards");
   }
-  const nonJokers = cards.filter(isJoker(game));
+  const nonJokers = cards.filter(R.complement<[Card]>(isJoker(game.currJoker)));
   const numJokers = numCards - nonJokers.length;
 
   if (nonJokers.length === 0) {
@@ -362,24 +211,7 @@ export function makeMeldedHand(
     sequences: sequences.filter((s) => s.numJokers > 0),
   };
 }
-/**
- * sum array of numbers
- */
-const sum = R.reduce((tot: number, elem: number) => tot + elem, 0);
-function cardsInSequence(seq: ISequence | ILife): Card[] {
-  return R.map((r: NonJokerRank) => new Card(seq.suit as Suit, r as Rank))(
-    seq.ranks
-  );
-}
-/**
- * Set difference
- * @param a
- * @param b
- * @returns
- */
-function setDiff<T>(a: Set<T>, b: Set<T>) {
-  return new Set(Array.from(a).filter((item) => !b.has(item)));
-}
+
 /**
  * get cards from a ITriplet
  * @param trip
@@ -419,18 +251,6 @@ export function enumerateMeldedHand(meldedHand: IMeldedHand): Card[] {
   return jokers.concat(lifeCards, sequenceCards, tripleCards);
 }
 /**
- * get Points for Card
- * @param c
- * @returns
- */
-function pointsOfCard(c: Card): number {
-  if ([Rank.Ace, Rank.King, Rank.Queen, Rank.Jack].includes(c.rank)) {
-    return 10;
-  } else {
-    return getRankOrdinal(c.rank);
-  }
-}
-/**
  * get total points for hand
  * @param game
  * @param playerIdx
@@ -467,7 +287,14 @@ export function meldedHandMatchesHand(
  * @returns
  */
 export function newPlayer(user: UserId): IPlayer {
-  return { user, status: PlayerStatus.Active, points: 0, moved: false, hand: [], meld:{}};
+  return {
+    user,
+    status: PlayerStatus.Active,
+    points: 0,
+    moved: false,
+    hand: [],
+    meld: {},
+  };
 }
 
 /**
@@ -478,7 +305,8 @@ export function newPlayer(user: UserId): IPlayer {
  */
 export function makeGame(
   playerIds: UserId[],
-  currUser: UserId
+  currUser: UserId,
+  gameStore?: IGameStore
 ): GameRestricted {
   const numPlayers: number = playerIds.length;
   const minCards = numPlayers * 13 + 10;
@@ -495,7 +323,7 @@ export function makeGame(
   );
   const players = R.map((u) => newPlayer(u), playerIds);
   const id = GAMES.length;
-  const game = {
+  const game = 
     id,
     state: GameState.Active,
     deck: usedDeck,
@@ -511,52 +339,6 @@ export function makeGame(
   const userIdx = R.findIndex(R.propEq("user", currUser), game.players);
   return getRestrictedView(game, userIdx);
 }
-
-/**
- * Make an ordered Deck with 52 standard cards + 2 jokers
- * @returns Deck
- */
-export function makeDeck(): Deck {
-  const deck: Deck = [];
-
-  for (const s of Object.values(Suit)) {
-    if (s === Suit.Joker) {
-      // Two Jokers
-      deck.push(new Card(Suit.Joker, Rank.One));
-      deck.push(new Card(Suit.Joker, Rank.One));
-      continue;
-    }
-    for (const r of Object.values(Rank)) {
-      if (r !== Rank.One) {
-        const card: Card = new Card(s, r);
-        deck.push(card);
-      }
-    }
-  }
-  return deck;
-}
-
-/**
- * Shuffle a deck of (any number of) cards
- * @param deck
- * @returns shuffled deck
- */
-export const shuffleDeck = (deck: Deck): Deck => {
-  return deck
-    .map((value) => ({ value, randKey: Math.random() }))
-    .sort((a, b) => a.randKey - b.randKey)
-    .map(({ value }) => value);
-};
-
-/**
- * Combines given decks into one
- * @param decks
- * @returns
- */
-export const mergeDecks = (decks: Deck[]): Deck => {
-  const d: Deck = [];
-  return d.concat(...decks);
-};
 
 /**
  * Shuffle given and deal 13 cards to each player
@@ -681,7 +463,9 @@ export function makeMove(
       break;
 
     case MoveType.Show:
-      if (!meldedHandMatchesHand(move.meldedHand, game.players[playerIdx].hand)) {
+      if (
+        !meldedHandMatchesHand(move.meldedHand, game.players[playerIdx].hand)
+      ) {
         return Error("Wrong Show");
       }
       game.players.forEach((p) => {
@@ -697,9 +481,29 @@ export function makeMove(
       break;
     default:
       return Error("Unknown move type");
-      //break;
+    //break;
   }
   game.moves.push(move);
   player.moved = true;
   return getRestrictedView(game, playerIdx);
+}
+
+/**
+ * Check if this is a winning hand.
+ * https://stackoverflow.com/questions/51225335/determine-if-an-indian-rummy-hand-is-a-winning-hand-java
+ * http://pds2.egloos.com/pds/200611/17/89/solving%20rummikub%20problems%20by%20integer%20linear%20programming.pdf
+ * Rules:
+ * At least
+ * @param gameId
+ * @param hand
+ * @returns melded hand
+ */
+
+export function checkHand(gameId: number, hand: Hand): IMeldedHand | Error {
+  const game = GAMES[gameId];
+  if (!game) {
+    return Error(`Invalid Game id ${gameId}`);
+  }
+
+  return Error("Not Implemented Yet");
 }
