@@ -1,6 +1,6 @@
 {
   "name": "@mudont/rummy-core",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Typescript library for Indian Rummy Card game",
   "main": "index.js",
   "scripts": {
