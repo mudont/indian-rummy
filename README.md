@@ -7,5 +7,5 @@ A very early stage library to model the card game of Indian Rummy.
 
 ## Functional style
 
-This repo uses functional style enabled by `fp-ts` and `ramda`, enforced by `eslint-plugin-functional`
+In the process of switching to functional programming style enabled by `fp-ts` and `ramda`, enforced by `eslint-plugin-functional`
 

@@ -1,6 +1,13 @@
 import assert from "assert";
+import { pipe } from "fp-ts/lib/function";
+import { fromCompare } from "fp-ts/lib/Ord";
 import * as R from "ramda";
+import * as N from "fp-ts/number"
 import { Card, Deck, GameRestricted, Rank, Suit } from "./types";
+import { sort } from "fp-ts/lib/ReadonlyArray";
+import { sequence } from "fp-ts/lib/Array"
+import * as Rand from "fp-ts/lib/Random"
+import * as IO from "fp-ts/lib/IO";
 
 //-------------------------------=============================================
 /**
@@ -15,20 +22,23 @@ export const isJoker = (gameJoker: Card) => (card: Card): boolean => card === ga
  * @returns integer
  */
 export const getRankOrdinal = (rank: Rank): number => {
-  return Object.values(Rank).indexOf(rank);
+    return rank == Rank.Ace ? 1 : Object.values(Rank).indexOf(rank);
 };
 /**
  * Get a random card
  * @returns 2 char string representing the card
  */
 // eslint-disable-next-line functional/functional-parameters
-export function getRandomCard(): string {
-  const suits = Array.from("CDHS");
-  const ranks = Array.from("A23456789TJQK");
-  const s = suits[Math.floor(Math.random() * suits.length)];
-  const r = ranks[Math.floor(Math.random() * ranks.length)];
+export function getRandomCard(): IO.IO<string> {
+    const suits = Array.from("CDHS");
+    const ranks = Array.from("A23456789TJQK");
+    const makeCard = (is: number) => (ir: number) => suits[is] + ranks[ir];
 
-  return s + r;
+    return pipe(
+        IO.of(makeCard),
+        IO.ap(Rand.randomInt(0, suits.length)),
+        IO.ap(Rand.randomInt(0, ranks.length))
+    )
 }
 /**
  * Make a Card from a two character string containing suit and rank
@@ -36,11 +46,19 @@ export function getRandomCard(): string {
  * @returns
  */
 
-export function makeCard(cardStr: string): Card {
-  assert(cardStr.length === 2);
-  return new Card(cardStr[0] as Suit, cardStr[1] as Rank);
+export function strToCard(cardStr: string): Card {
+    //assert(cardStr.length === 2);
+    return { suit: cardStr[0] as Suit, rank: cardStr[1] as Rank };
 }
-export const deserializeCard = makeCard;
+export function mkCard(s: Suit, r: Rank): Card { return strToCard(s + r) }
+
+export function cardToJSON(card: Card) {
+    return card.suit + card.rank;
+}
+
+export const serializeCard = cardToJSON;
+
+export const deserializeCard = mkCard;
 
 export const gamePlayersLens = R.lens(R.prop('players')<any>, R.assoc('players'));
 
@@ -50,35 +68,26 @@ export const gamePlayersLens = R.lens(R.prop('players')<any>, R.assoc('players')
  * @returns
  */
 export function pointsOfCard(c: Card): number {
-  if ([Rank.Ace, Rank.King, Rank.Queen, Rank.Jack].includes(c.rank)) {
-    return 10;
-  } else {
-    return getRankOrdinal(c.rank);
-  }
+    return [Rank.Ace, Rank.King, Rank.Queen, Rank.Jack].includes(c.rank) ? 10 : getRankOrdinal(c.rank)
 }
 /**
  * Make an ordered Deck with 52 standard cards + 2 jokers
  * @returns Deck
  */
 
-export function makeDeck(): Deck {
-  const deck: Deck = [];
+export const mkDeck = (): Deck => R.flatten(R.map(getSuitCards, Object.values(Suit)))
 
-  for (const s of Object.values(Suit)) {
-    if (s === Suit.Joker) {
-      // Two Jokers
-      deck.push(new Card(Suit.Joker, Rank.One));
-      deck.push(new Card(Suit.Joker, Rank.One));
-      continue;
-    }
-    for (const r of Object.values(Rank)) {
-      if (r !== Rank.One) {
-        const card: Card = new Card(s, r);
-        deck.push(card);
-      }
-    }
-  }
-  return deck;
+
+export function getSuitCards(s: Suit): Deck {
+    return s === Suit.Joker ?
+        // Two Jokers
+        [
+            mkCard(Suit.Joker, Rank.One),
+            mkCard(Suit.Joker, Rank.One),
+        ]
+        :
+        R.map(r => mkCard(s, r), R.filter(r => r !== Rank.One)(Object.values(Rank)))
+
 }
 /**
  * Shuffle a deck of (any number of) cards
@@ -86,11 +95,26 @@ export function makeDeck(): Deck {
  * @returns shuffled deck
  */
 
-export const shuffleDeck = (deck: Deck): Deck => {
-  return deck
-    .map((value) => ({ value, randKey: Math.random() }))
-    .sort((a, b) => a.randKey - b.randKey)
-    .map(({ value }) => value);
+export const shuffleDeck = (deck: Deck): IO.IO<Deck> => {
+    const attachRandToCard = (c: Card): IO.IO<readonly [number, Card]> => {
+        return pipe(
+            Rand.random,
+            IO.map((n: number) => [n, c])
+        )
+    }
+    const deckWithRands = IO.sequenceArray(R.map(attachRandToCard, deck));
+    return IO.chain(
+        (dwr: readonly (readonly [number, Card])[]) =>
+            IO.of(
+                R.map(([a, b]: readonly [number, Card]) => b,
+                    R.sort<readonly [number, Card]>(
+                        (a, b) => a[0] - b[0],
+                        dwr
+                    )
+                )
+            )
+    )(deckWithRands);
+
 };
 /**
  * Combines given decks into one
@@ -98,7 +122,9 @@ export const shuffleDeck = (deck: Deck): Deck => {
  * @returns
  */
 
-export const mergeDecks = (decks: Deck[]): Deck => {
-  const d: Deck = [];
-  return d.concat(...decks);
+export const mergeDecks = (decks: readonly Deck[]): Deck => {
+    const d: Deck = [];
+    return d.concat(...decks);
 };
+
+export const RankOrd = fromCompare((a: Card, b: Card) => N.Ord.compare(getRankOrdinal(a.rank), getRankOrdinal(b.rank)))

@@ -44,84 +44,74 @@ export enum MoveType {
   Finish,
 }
 
-export class Card {
-  suit: Suit;
-  rank: Rank;
-  constructor(s: Suit, r: Rank) {
-    this.suit = s;
-    this.rank = r;
-  }
-  toJSON() {
-    return this.suit + this.rank;
-  }
-  serialize() {
-    return this.toJSON();
-  }
+export interface Card {
+  readonly suit: Suit;
+  readonly rank: Rank;
 }
 
 export type UserId = string;
 
-export type Hand = Card[];
+export type Hand = ReadonlyArray<Card>;
 
 export type NonJokerSuit = Omit<Suit, Suit.Joker>;
 export type NonJokerRank = Omit<Rank, Rank.One>;
 export interface ISequence {
-  suit: NonJokerSuit;
-  ranks: NonJokerRank[];
-  numJokers: number;
+  readonly suit: NonJokerSuit;
+  readonly ranks: readonly NonJokerRank[];
+  readonly numJokers: number;
 }
 export interface ILife {
-  suit: NonJokerSuit;
-  ranks: NonJokerRank[];
+  readonly suit: NonJokerSuit;
+  readonly ranks: readonly NonJokerRank[];
 }
 
 export interface ITriplet {
-  rank: Rank;
-  suits: NonJokerSuit[];
-  numJokers: number;
+  readonly rank: Rank;
+  readonly suits: readonly NonJokerSuit[];
+  readonly numJokers: number;
 }
 
 export interface IMeldedHand {
-  life?: ILife;
-  triplets?: ITriplet[];
-  sequences?: ISequence[];
+  readonly life?: ILife;
+  readonly triplets?: readonly ITriplet[];
+  readonly sequences?: readonly ISequence[];
 }
 
-export type Pile = Card[];
+export type Pile = readonly Card[];
 
-export type Deck = Card[];
+export type Deck = readonly Card[];
 
 export interface IPlayer {
-  user: UserId;
-  status: PlayerStatus;
-  points: number;
-  moved: boolean;
-  hand: Hand;
-  meld: IMeldedHand;
+  readonly user: UserId;
+  readonly status: PlayerStatus;
+  readonly points: number;
+  readonly moved: boolean;
+  readonly hand: Hand;
+  readonly meld: IMeldedHand;
 }
 export type RestrictedPlayer = Omit<IPlayer, "hand" | "meld">;
 export interface IMoveSimple {
-  moveType:
+  readonly moveType:
     | MoveType.Drop
     | MoveType.TakeFromDeck
     | MoveType.TakeOpen
     | MoveType.Finish;
-  player: UserId;
+  readonly player: UserId;
 }
 export interface IMoveShow {
-  moveType: MoveType.Show;
-  player: UserId;
-  meldedHand: IMeldedHand;
+  readonly moveType: MoveType.Show;
+  readonly player: UserId;
+  readonly meldedHand: IMeldedHand;
 }
 export interface IMoveMeld {
-  moveType: MoveType.Meld;
-  player: UserId;
-  meldedHand: IMeldedHand;
+  readonly moveType: MoveType.Meld;
+  readonly player: UserId;
+  readonly meldedHand: IMeldedHand;
 }
 export interface IMoveReturnCard {
-  moveType: MoveType.ReturnExtraCard;
-  player: UserId;
-  cardDiscarded: Card;
+  readonly moveType: MoveType.ReturnExtraCard;
+  readonly player: UserId;
+  readonly cardDiscarded: Card;
 }
 export type IMove = IMoveSimple | IMoveShow | IMoveReturnCard | IMoveMeld;
 export enum GameState {
@@ -132,24 +122,24 @@ export enum GameState {
  * Represents a Rummy game
  */
 export interface IGame {
-  id: number;
-  state: GameState;
-  deck: Deck;
-  openPile: Card[];
-  currJoker: Card;
-  turnPlayer: IPlayer;
-  players: IPlayer[];
-  moves: IMove[];
+  readonly id: number;
+  readonly state: GameState;
+  readonly deck: Deck;
+  readonly openPile: readonly Card[];
+  readonly currJoker: Card;
+  readonly turnPlayer: IPlayer;
+  readonly players: readonly IPlayer[];
+  readonly moves: readonly IMove[];
 }
 export type CreateGameInput = Omit<IGame, "id">;
 export type GameRestricted = Omit<IGame, "deck" | "players"> & {
-  myHand?: Hand;
-  myMeld?: IMeldedHand;
-  players: RestrictedPlayer[];
+  readonly myHand?: Hand;
+  readonly myMeld?: IMeldedHand;
+  readonly players: readonly RestrictedPlayer[];
 };
 
 export interface IGameStore {
-  createGame: (game: CreateGameInput) => TE.TaskEither<Error, IGame>;
-  saveGame: (game: IGame) => TE.TaskEither<Error, IGame>;
-  loadGame: (gameId: number) => TE.TaskEither<Error, IGame>;
+  readonly createGame: (game: CreateGameInput) => TE.TaskEither<Error, IGame>;
+  readonly saveGame: (game: IGame) => TE.TaskEither<Error, IGame>;
+  readonly loadGame: (meId: number) => TE.TaskEither<Error, IGame>;
 }

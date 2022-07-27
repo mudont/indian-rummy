@@ -16,5 +16,10 @@
     "plugin:functional/recommended",
     "plugin:functional/stylistic",
     "plugin:functional/all"
-  ]
+  ],
+  "rules": {
+    // Some rules don't really work, or are too hard or verbose to fix.
+    "functional/functional-parameters": "off",
+    "@typescript-eslint/prefer-readonly-parameter-types": "off"
+  }
 }
