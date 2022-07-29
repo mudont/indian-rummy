@@ -43,8 +43,13 @@ import TE from "fp-ts/lib/TaskEither";
 import N from "fp-ts/number"
 import { traceWithValue, trace } from "fp-ts-std/Debug";
 import { Do } from "fp-ts-contrib/lib/Do";
-import { append, appendW, dropLeft, reduce, sort, map } from "fp-ts/lib/ReadonlyArray";
+import { append, appendW, dropLeft, reduce, sort, map, filter } from "fp-ts/lib/ReadonlyArray";
 import { fromCompare } from "fp-ts/lib/Ord";
+import * as IO from "fp-ts/lib/IO";
+import * as IOE from "fp-ts/lib/IOEither";
+import { guard } from 'fp-ts-std/Function'
+import * as L from "monocle-ts/Lens"
+
 const debug = Dbg("app:cards");
 
 
@@ -177,11 +182,10 @@ export function mkSequence(
         E.bind('aceCloserToLastCardThanFirst', ({ ordinals }) =>
             E.of(haveAce(ordinals) && (ordinals[1] - ordinals[0]) > (14 - ordinals[ordinals.length - 1]))
         ),
-        E.bind('ordinalsToCheck', ({ ordinals, aceCloserToLastCardThanFirst }) => E.of(R.cond([
+        E.bind('ordinalsToCheck', ({ ordinals, aceCloserToLastCardThanFirst }) => E.of(guard([
             [isNotPluralArr, (ordinals) => ordinals],
             [() => aceCloserToLastCardThanFirst, ordinals => append(ordinals[0])(dropLeft(1)(ordinals))],
-            [R.T, ordinals => ordinals],
-        ])(ordinals) as readonly number[])),
+        ])(R.identity)(ordinals) as readonly number[])),
         E.chain(E.fromPredicate(({ ordinalsToCheck, numJokers }: Pick<IScope, "ordinalsToCheck" | "numJokers">) =>
             ordinalsToCheck[ordinalsToCheck.length - 1] - ordinalsToCheck[0] + 1 === ordinalsToCheck.length + numJokers,
             () => new Error("Have neither consecutive ranks nor enough jokers to fill gaps"))
@@ -240,10 +244,15 @@ export function mkTriplet(
         E.bind('ranks', ({ nonJokers }) => E.of(nonJokers.map((c) => c.rank))),
         E.chain(E.fromPredicate((s) => !hasDuplicates(s.suits), () => new Error("Triplet must have distinct suits"))),
         E.chain(E.fromPredicate((s) => allElemsSame(s.ranks), () => new Error("Triplet must have single rank"))),
-        E.chain(R.cond([
-            [(s: IScope) => s.nonJokers.length === 0, (s) => E.right({ rank: Rank.Two, suits: [], numJokers: cards.length })],
-            [R.T, (s) => E.right({ rank: s.nonJokers[0].rank, suits: s.suits, numJokers: s.numJokers })],
-        ])),
+        E.chain(
+
+            guard<IScope, E.Either<Error, ITriplet>>([
+                [
+                    (s: IScope) => s.nonJokers.length === 0,
+                    (s) => E.right({ rank: Rank.Two, suits: [], numJokers: cards.length })
+                ],
+            ])((s) => E.right({ rank: s.nonJokers[0].rank, suits: s.suits, numJokers: s.numJokers }))
+        ),
     );
 }
 
@@ -374,9 +383,8 @@ export function newPlayer(user: UserId): IPlayer {
         meld: {},
     };
 }
-
 /**
- * Shuffle given and deal 13 cards to each player
+ * Shuffle given deck and deal 13 cards to each player
  * @param deck
  * @param numPlayers
  * @param handSize
@@ -386,19 +394,39 @@ export const dealFromDeck = (
     deck: Deck,
     numPlayers: number,
     handSize = 13
-): readonly [Deck, readonly (readonly Card[])[], Card, Card] => {
-    //assert(deck.length > numPlayers * handSize + 2);
-    const shuffled = shuffleDeck(deck);
-    const hands: readonly (readonly Card[])[] = pipe(
+): IOE.IOEither<Error, readonly [Deck, readonly (readonly Card[])[], Card, Card]> => {
+
+    const splitDeckToHands = (deck: Deck): readonly (Hand)[] => {
+        return R.splitEvery<Card>(handSize, deck) as readonly (Hand)[]
+    }
+    return pipe(
         deck,
-        shuffleDeck,
-        R.splitEvery(handSize),
-        R.take(numPlayers)<readonly Card[]>,
+        IOE.fromPredicate((deck: Deck) => deck.length > numPlayers * handSize + 2, () => new Error("Not enough cards in deck")),
+        IOE.chain((deck: Deck) => IOE.rightIO(shuffleDeck(deck))),
+        IOE.bindTo('shuffled'),
+        IOE.bind('hands', ({ shuffled }) =>
+            IOE.right(pipe(
+                shuffled,
+                splitDeckToHands,
+                R.take<readonly Card[]>(numPlayers)
+            )),
+        ),
+        IOE.bind('remainingCards', ({ shuffled }) =>
+            IOE.right(R.drop<Card>(numPlayers * handSize)(shuffled))
+        ),
+        IOE.bind('topCard', ({ remainingCards }) =>
+            IOE.right(remainingCards[0])
+        ),
+        IOE.bind('wcJoker', ({ remainingCards }) =>
+            IOE.right(remainingCards[1])
+        ),
+        IOE.bind('remainingDeck', ({ remainingCards }) =>
+            IOE.right(R.drop<Card>(2)(remainingCards))
+        ),
+        IOE.chain(({ remainingDeck, hands, topCard, wcJoker }) =>
+            IOE.right([remainingDeck, hands, topCard, wcJoker])
+        )
     )
-    const remainingCards = R.drop(numPlayers * handSize, shuffled);
-    const [topCard, bottomCard] = R.take(2, remainingCards);
-    const remainingDeck = R.drop(2, remainingCards);
-    return [remainingDeck, hands, topCard, bottomCard];
 };
 
 /**
@@ -421,108 +449,216 @@ export function playerFinished(p: IPlayer): boolean {
  * @returns
  */
 export function mkMove(
-    gameId: number,
+    game: IGame,
     user: UserId,
     move: IMove
-): GameRestricted | Error {
-    const game = GAMES[gameId];
-    if (!game) {
-        return Error(`Invalid Game id ${gameId}`);
-    }
-    if (game.state === GameState.Finished) {
-        return Error(`Game ${gameId} is finished`);
-    }
-    const playerIdx: number | undefined = R.findIndex(
-        R.propEq("user", user),
-        game.players
-    );
-    if (!playerIdx) {
-        return Error("user is not a player");
-    }
-    const player: IPlayer = game.players[playerIdx];
-    if (playerFinished(player)) {
-        return Error("Player status doesn't allow any moves");
-    }
-    if (
-        player.status === PlayerStatus.OwesCard &&
-        move.moveType !== MoveType.ReturnExtraCard
-    ) {
-        return Error("Player must return extra card before doing anything else");
-    }
-    switch (move.moveType) {
-        case MoveType.Drop:
-            player.points = player.moved ? MIDDLE_DROP_POINTS : INITIAL_DROP_POINTS;
-            break;
-
-        case MoveType.TakeOpen:
-            // XXX TODO handle edge cases
-            if (game.openPile.length === 0) {
-                return Error("No Open cards yet");
-            }
-            game.players[playerIdx].hand.push(game.openPile.splice(-1, 1)[0]);
-            player.status = PlayerStatus.OwesCard;
-            break;
-
-        case MoveType.TakeFromDeck:
-            game.players[playerIdx].hand.push(game.deck.splice(0, 1)[0]);
-            player.status = PlayerStatus.OwesCard;
-            if (game.deck.length === 0) {
-                // Deck has run out
-                // Take all open cards but the top one, shuffle, and use them as deck
-                const tmp = game.openPile.splice(-1, 1);
-                game.deck = shuffleDeck(game.openPile);
-                game.openPile = tmp;
-            }
-            break;
-
-        case MoveType.ReturnExtraCard:
-            if (move.cardDiscarded) {
-                game.openPile.push(move.cardDiscarded);
-            } else {
-                return Error("No card returned");
-            }
-            game.players[playerIdx].hand = game.players[playerIdx].hand.filter(
-                (c) => c !== move.cardDiscarded
+): IOE.IOEither<Error, GameRestricted> {
+    type CondLeft = (value: MoveType) => value is MoveType;
+    type CondRight = (value: MoveType) => IGame;
+    const ret: IOE.IOEither<Error, GameRestricted> = pipe(
+        game,
+        IOE.fromPredicate((game: IGame) => game.state === GameState.Active, () =>
+            new Error("Game is not active")
+        ),
+        IOE.bind('playerIdx', () => {
+            const ix = R.findIndex(
+                R.propEq("user", user),
+                game.players
             );
-            player.status = PlayerStatus.Active;
-            break;
+            return ix < 0 ? IOE.left(new Error("Player is not in game")) : IOE.right(ix)
+        }),
+        IOE.bind('player', ({ playerIdx }) => {
+            const player: IPlayer = game.players[playerIdx];
+            return playerFinished(player) ?
+                IOE.left(new Error("Player is not in game")) :
+                (
+                    player.status === PlayerStatus.OwesCard &&
+                    move.moveType !== MoveType.ReturnExtraCard
+                ) ? IOE.left(new Error("Player must return extra card before doing anything else")) :
+                    IOE.right(player)
+        }),
+        IOE.chain(
+            ({ playerIdx, player }): IOE.IOEither<Error, IGame> => {
+                const lensHand = R.lensPath(["players", playerIdx, "hand"]);
+                const lensOpenPile = R.lensPath(["openPile"]);
+                const lensDeck = R.lensPath(["deck"]);
+                const lensPoints = R.lensPath(["players", playerIdx, "points"]);
+                const ret = guard([
+                    [R.equals(MoveType.Drop) as CondLeft, () => {
+                        return IOE.right(R.set(lensPoints, player.moved ? MIDDLE_DROP_POINTS : INITIAL_DROP_POINTS, game))
+                    }],
+                    [R.equals(MoveType.TakeOpen) as CondLeft, () => {
+                        return IOE.right(pipe(
+                            game,
+                            R.over(lensHand, R.append(game.openPile[game.openPile.length - 1])),
+                            R.over(lensOpenPile, R.dropLast(1)),
+                        ))
+                    }],
+                    [R.equals(MoveType.TakeFromDeck) as CondLeft, () => {
+                        const g1 = pipe(
+                            game,
+                            R.over(lensHand, R.append(game.deck[0])),
+                            R.over(lensDeck, R.drop(1)),
+                        );
+                        return (g1.deck.length > 0 ? IOE.right(g1) :
+                            pipe(
+                                g1,
+                                IOE.bindTo('g1'),
+                                IOE.bind('shuffled',
+                                    ({ g1 }: { g1: IGame }) =>
+                                        IOE.fromIO<Deck, Error>(shuffleDeck(R.drop(1, g1.openPile)))),
+                                IOE.chain(({ g1, shuffled }: { g1: IGame, shuffled: Deck }) => (
+                                    R.set(lensDeck, shuffled, g1)
+                                )),
+                                IOE.map(R.set(lensOpenPile, [game.openPile[0]])),
+                            ))
 
-        case MoveType.Meld:
-            if (
-                setDiff(
-                    new Set(enumerateMeldedHand(move.meldedHand)),
-                    new Set(game.players[playerIdx].hand)
-                ).size > 0
-            ) {
-                return Error("Meld contains cards not in your Hand");
+                    }],
+                    [R.equals(MoveType.ReturnExtraCard) as CondLeft, () => {
+                        return 'cardDiscarded' in move && move.cardDiscarded ?
+                            (() => {
+                                const setOwesCard = pipe(
+                                    L.id<IGame>(),
+                                    L.prop('openPile'),
+                                    L.modify(append(move.cardDiscarded)),
+                                );
+                                const setHand = pipe(
+                                    L.id<IGame>(),
+                                    L.prop('players'),
+                                    L.prop(playerIdx),
+                                    L.prop('hand'),
+                                    L.modify(filter(c => c !== move.cardDiscarded))),
+                                return IOE.right(game);
+                            })() :
+                            IOE.left(new Error("Player must discard card before returning extra card"))
+                    }],
+                    [R.equals(MoveType.Meld) as CondLeft, () => {
+                        return IOE.right(game)
+                    }],
+                    [R.equals(MoveType.Show) as CondLeft, () => {
+                        return IOE.right(game)
+                    }],
+                    [R.equals(MoveType.Finish) as CondLeft, () => {
+                        return IOE.right(game)
+                    }],
+                ])(() => IOE.left(new Error("Unknown move type")))(move.moveType);
+                return ret;
+                //return updatedGame instanceof Error ? IOE.left(updatedGame) : IOE.right(updatedGame);
             }
-            game.players[playerIdx].meld = move.meldedHand;
-            break;
+        ),
+    )
+    return IOE.left(new Error("mkMove not implemented"));
+}
+/**
+ * Make a Rummy move. this is the only way for a Rummy game can change state
+ * @param gameId
+ * @param user
+ * @param move
+ * @returns
+ */
+export function mkMoveOld(
+    game: number,
+    user: UserId,
+    move: IMove
+// ): IOE.IOEither<Error, GameRestricted> {
+//     const game = GAMES[gameId];
+//     if (!game) {
+//         return Error(`Invalid Game id ${gameId}`);
+//     }
+//     if (game.state === GameState.Finished) {
+//         return Error(`Game ${gameId} is finished`);
+//     }
+//     const playerIdx: number | undefined = R.findIndex(
+//         R.propEq("user", user),
+//         game.players
+//     );
+//     if (!playerIdx) {
+//         return Error("user is not a player");
+//     }
+//     const player: IPlayer = game.players[playerIdx];
+//     if (playerFinished(player)) {
+//     return Error("Player status doesn't allow any moves");
+// }
+// if (
+//     player.status === PlayerStatus.OwesCard &&
+//     move.moveType !== MoveType.ReturnExtraCard
+// ) {
+//     return Error("Player must return extra card before doing anything else");
+// }
+switch (move.moveType) {
+    case MoveType.Drop:
+        player.points = player.moved ? MIDDLE_DROP_POINTS : INITIAL_DROP_POINTS;
+        break;
 
-        case MoveType.Show:
-            if (
-                !meldedHandMatchesHand(move.meldedHand, game.players[playerIdx].hand)
-            ) {
-                return Error("Wrong Show");
-            }
-            game.players.forEach((p) => {
-                p.status = PlayerStatus.Lost;
-            });
-            player.status = PlayerStatus.Won;
-            break;
-        case MoveType.Finish:
-            game.players.forEach((p, idx) => {
-                p.points = computePoints(game, idx);
-            });
-            game.state = GameState.Finished;
-            break;
-        default:
-            return Error("Unknown move type");
-        //break;
-    }
-    game.moves.push(move);
-    player.moved = true;
-    return getRestrictedView(game, playerIdx);
+    case MoveType.TakeOpen:
+        // XXX TODO handle edge cases
+        if (game.openPile.length === 0) {
+            return Error("No Open cards yet");
+        }
+        game.players[playerIdx].hand.push(game.openPile.splice(-1, 1)[0]);
+        player.status = PlayerStatus.OwesCard;
+        break;
+
+    case MoveType.TakeFromDeck:
+        game.players[playerIdx].hand.push(game.deck.splice(0, 1)[0]);
+        player.status = PlayerStatus.OwesCard;
+        if (game.deck.length === 0) {
+            // Deck has run out
+            // Take all open cards but the top one, shuffle, and use them as deck
+            const tmp = game.openPile.splice(-1, 1);
+            game.deck = shuffleDeck(game.openPile);
+            game.openPile = tmp;
+        }
+        break;
+
+    case MoveType.ReturnExtraCard:
+        if (move.cardDiscarded) {
+            game.openPile.push(move.cardDiscarded);
+        } else {
+            return Error("No card returned");
+        }
+        game.players[playerIdx].hand = game.players[playerIdx].hand.filter(
+            (c) => c !== move.cardDiscarded
+        );
+        player.status = PlayerStatus.Active;
+        break;
+
+    case MoveType.Meld:
+        if (
+            setDiff(
+                new Set(enumerateMeldedHand(move.meldedHand)),
+                new Set(game.players[playerIdx].hand)
+            ).size > 0
+        ) {
+            return Error("Meld contains cards not in your Hand");
+        }
+        game.players[playerIdx].meld = move.meldedHand;
+        break;
+
+    case MoveType.Show:
+        if (
+            !meldedHandMatchesHand(move.meldedHand, game.players[playerIdx].hand)
+        ) {
+            return Error("Wrong Show");
+        }
+        game.players.forEach((p) => {
+            p.status = PlayerStatus.Lost;
+        });
+        player.status = PlayerStatus.Won;
+        break;
+    case MoveType.Finish:
+        game.players.forEach((p, idx) => {
+            p.points = computePoints(game, idx);
+        });
+        game.state = GameState.Finished;
+        break;
+    default:
+        return Error("Unknown move type");
+    //break;
+}
+game.moves.push(move);
+player.moved = true;
+return getRestrictedView(game, playerIdx);
 }
 
 /**
