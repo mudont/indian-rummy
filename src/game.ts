@@ -12,6 +12,7 @@ import {
     ILife,
     IMeldedHand,
     IMove,
+    IMoveMeld,
     IPlayer,
     ISequence,
     ITriplet,
@@ -43,7 +44,7 @@ import TE from "fp-ts/lib/TaskEither";
 import N from "fp-ts/number"
 import { traceWithValue, trace } from "fp-ts-std/Debug";
 import { Do } from "fp-ts-contrib/lib/Do";
-import { append, appendW, dropLeft, reduce, sort, map, filter } from "fp-ts/lib/ReadonlyArray";
+import { append, appendW, dropLeft, reduce, sort, map, mapWithIndex, filter } from "fp-ts/lib/ReadonlyArray";
 import { fromCompare } from "fp-ts/lib/Ord";
 import * as IO from "fp-ts/lib/IO";
 import * as IOE from "fp-ts/lib/IOEither";
@@ -98,32 +99,46 @@ function getRestrictedView(game: IGame, playerIdx: number) {
  */
 export function mkGame(
     playerIds: readonly UserId[]
-): CreateGameInput {
+): IOE.IOEither<Error, CreateGameInput> {
     const numPlayers: number = playerIds.length;
     const minCards = numPlayers * 13 + 10;
     const nDecks = Math.ceil(minCards / 54);
     const decks = Array.from({ length: nDecks }, mkDeck);
 
     const mergedDeck = mergeDecks(decks);
-    const [usedDeck, hands, openCard, joker] = dealFromDeck(
-        mergedDeck,
-        numPlayers,
-        13
-    );
-    const players = R.zipWith(
-        (player: IPlayer, hand: Hand) => ({ ...player, hand }),
-        R.map(newPlayer, playerIds),
-        hands
-    );
-    return {
-        state: GameState.Active,
-        deck: usedDeck,
-        openPile: [openCard],
-        currJoker: joker,
-        players,
-        turnPlayer: players[0],
-        moves: [],
-    };
+    //const [usedDeck, hands, openCard, joker] = ;
+    return pipe(
+        IOE.Do,
+        IOE.bind("dealRes", () => dealFromDeck(
+            mergedDeck,
+            numPlayers,
+            13
+        )),
+        IOE.bind('usedDeck', ({ dealRes }) => IOE.right(dealRes[0])),
+        IOE.bind('hands', ({ dealRes }) => IOE.right(dealRes[1])),
+        IOE.bind('openCard', ({ dealRes }) => IOE.right(dealRes[2])),
+        IOE.bind('joker', ({ dealRes }) => IOE.right(dealRes[3])),
+        IOE.chain(
+            ({ usedDeck, hands, openCard, joker }) => {
+                const players = R.zipWith(
+                    (player: IPlayer, hand: Hand) => ({ ...player, hand }),
+                    R.map(newPlayer, playerIds),
+                    hands
+                );
+                const game: CreateGameInput = {
+                    deck: usedDeck,
+                    players,
+                    openPile: [openCard],
+                    currJoker: joker,
+                    state: GameState.Active,
+                    turnPlayer: players[0],
+                    moves: [],
+                };
+                return IOE.right(game);
+            }
+        )
+    )
+
     // const userIdx = R.findIndex(R.propEq("user", currUser), game.players);
     // return getRestrictedView(game, userIdx);
 }
@@ -452,10 +467,14 @@ export function mkMove(
     game: IGame,
     user: UserId,
     move: IMove
-): IOE.IOEither<Error, GameRestricted> {
+): IOE.IOEither<Error, IGame> {
     type CondLeft = (value: MoveType) => value is MoveType;
     type CondRight = (value: MoveType) => IGame;
-    const ret: IOE.IOEither<Error, GameRestricted> = pipe(
+    const playerIdx = R.findIndex(
+        R.propEq("user", user),
+        game.players
+    );
+    const gameAfterMove: IOE.IOEither<Error, IGame> = pipe(
         game,
         IOE.fromPredicate((game: IGame) => game.state === GameState.Active, () =>
             new Error("Game is not active")
@@ -479,11 +498,16 @@ export function mkMove(
         }),
         IOE.chain(
             ({ playerIdx, player }): IOE.IOEither<Error, IGame> => {
-                const lensHand = R.lensPath(["players", playerIdx, "hand"]);
-                const lensOpenPile = R.lensPath(["openPile"]);
-                const lensDeck = R.lensPath(["deck"]);
-                const lensPoints = R.lensPath(["players", playerIdx, "points"]);
-                const ret = guard([
+                const lensHand = R.lensPath<IGame, Hand>(["players", playerIdx, "hand"]);
+                const lensOpenPile = R.lensPath<IGame, readonly Card[]>(["openPile"]);
+                const lensDeck = R.lensPath<IGame, Deck>(["deck"]);
+                const lensPoints = R.lensPath<IGame, number>(["players", playerIdx, "points"]);
+                const removeCardFromDiscardedPile = pipe(
+                    L.id<IGame>(),
+                    L.prop('openPile'),
+                    L.modify(R.drop(1)),
+                )
+                const ret: IOE.IOEither<Error, IGame> = guard([
                     [R.equals(MoveType.Drop) as CondLeft, () => {
                         return IOE.right(R.set(lensPoints, player.moved ? MIDDLE_DROP_POINTS : INITIAL_DROP_POINTS, game))
                     }],
@@ -491,7 +515,8 @@ export function mkMove(
                         return IOE.right(pipe(
                             game,
                             R.over(lensHand, R.append(game.openPile[game.openPile.length - 1])),
-                            R.over(lensOpenPile, R.dropLast(1)),
+                            //R.over(lensOpenPile, R.dropLast(1)),
+                            removeCardFromDiscardedPile,
                         ))
                     }],
                     [R.equals(MoveType.TakeFromDeck) as CondLeft, () => {
@@ -502,20 +527,22 @@ export function mkMove(
                         );
                         return (g1.deck.length > 0 ? IOE.right(g1) :
                             pipe(
-                                g1,
-                                IOE.bindTo('g1'),
+                                IOE.Do,
+                                IOE.bind('g1', () => IOE.right(g1)),
+                                // IOE.bindTo<Error, IGame>('g1'),
                                 IOE.bind('shuffled',
-                                    ({ g1 }: { g1: IGame }) =>
+                                    ({ g1 }: { readonly g1: IGame }) =>
                                         IOE.fromIO<Deck, Error>(shuffleDeck(R.drop(1, g1.openPile)))),
-                                IOE.chain(({ g1, shuffled }: { g1: IGame, shuffled: Deck }) => (
-                                    R.set(lensDeck, shuffled, g1)
+                                IOE.chain(({ g1, shuffled }: { readonly g1: IGame, readonly shuffled: Deck }) => (
+                                    IOE.right(R.set(lensDeck, shuffled, g1))
                                 )),
                                 IOE.map(R.set(lensOpenPile, [game.openPile[0]])),
                             ))
 
                     }],
                     [R.equals(MoveType.ReturnExtraCard) as CondLeft, () => {
-                        return 'cardDiscarded' in move && move.cardDiscarded ?
+                        const valid = 'cardDiscarded' in move && move.cardDiscarded;
+                        return valid ?
                             (() => {
                                 const setOwesCard = pipe(
                                     L.id<IGame>(),
@@ -527,18 +554,68 @@ export function mkMove(
                                     L.prop('players'),
                                     L.prop(playerIdx),
                                     L.prop('hand'),
-                                    L.modify(filter(c => c !== move.cardDiscarded))),
-                                return IOE.right(game);
+                                    L.modify(filter(c => c !== move.cardDiscarded)));
+
+                                const setPlayerStatus = pipe(
+                                    L.id<IGame>(),
+                                    L.prop('players'),
+                                    L.prop(playerIdx),
+                                    L.prop('status'),
+                                    L.modify(s => PlayerStatus.Active));
+                                return IOE.right(pipe(game, setOwesCard, setHand, setPlayerStatus));
                             })() :
                             IOE.left(new Error("Player must discard card before returning extra card"))
                     }],
                     [R.equals(MoveType.Meld) as CondLeft, () => {
-                        return IOE.right(game)
+                        // to satisfy typechecker
+                        const mv: IMoveMeld = move as IMoveMeld;
+                        const setMeld = pipe(
+                            L.id<IGame>(),
+                            L.prop('players'),
+                            L.prop(playerIdx),
+                            L.prop('meld'),
+                            L.modify(m => mv.meldedHand));
+                        const meldUsesValidCards = setDiff(
+                            new Set(enumerateMeldedHand(mv.meldedHand)),
+                            new Set(game.players[playerIdx].hand)
+                        ).size > 0;
+                        return !meldUsesValidCards ?
+                            IOE.left(new Error("Meld contains cards not in your Hand")) :
+                            IOE.right(pipe(game, setMeld))
                     }],
                     [R.equals(MoveType.Show) as CondLeft, () => {
-                        return IOE.right(game)
+                        const cleanShow = 'meldedHand' in move &&
+                            meldedHandMatchesHand(move.meldedHand, game.players[playerIdx].hand)
+                        const setWinnerLosers = pipe(
+                            L.id<IGame>(),
+                            L.prop('players'),
+                            L.modify(mapWithIndex((i, p) => {
+                                const status = i === playerIdx ? PlayerStatus.Won : PlayerStatus.Lost;
+                                const setStatus = pipe(
+                                    L.id<IPlayer>(),
+                                    L.prop('status'),
+                                    L.modify(s => status),
+                                );
+                                return pipe(p, setStatus);
+                            })));
+                        return !cleanShow ?
+                            IOE.left(new Error("Meld does not match your hand")) :
+                            IOE.right(pipe(game, setWinnerLosers));
                     }],
                     [R.equals(MoveType.Finish) as CondLeft, () => {
+                        const setPoints = pipe(
+                            L.id<IGame>(),
+                            L.prop('players'),
+                            L.modify(mapWithIndex((i, p) => {
+                                const status = i === playerIdx ? PlayerStatus.Won : PlayerStatus.Lost;
+                                const setPoints = pipe(
+                                    L.id<IPlayer>(),
+                                    L.prop('points'),
+                                    L.modify(p => computePoints(game, i)),
+                                );
+                                return pipe(p, setPoints);
+                            })));
+
                         return IOE.right(game)
                     }],
                 ])(() => IOE.left(new Error("Unknown move type")))(move.moveType);
@@ -547,118 +624,27 @@ export function mkMove(
             }
         ),
     )
-    return IOE.left(new Error("mkMove not implemented"));
-}
-/**
- * Make a Rummy move. this is the only way for a Rummy game can change state
- * @param gameId
- * @param user
- * @param move
- * @returns
- */
-export function mkMoveOld(
-    game: number,
-    user: UserId,
-    move: IMove
-// ): IOE.IOEither<Error, GameRestricted> {
-//     const game = GAMES[gameId];
-//     if (!game) {
-//         return Error(`Invalid Game id ${gameId}`);
-//     }
-//     if (game.state === GameState.Finished) {
-//         return Error(`Game ${gameId} is finished`);
-//     }
-//     const playerIdx: number | undefined = R.findIndex(
-//         R.propEq("user", user),
-//         game.players
-//     );
-//     if (!playerIdx) {
-//         return Error("user is not a player");
-//     }
-//     const player: IPlayer = game.players[playerIdx];
-//     if (playerFinished(player)) {
-//     return Error("Player status doesn't allow any moves");
-// }
-// if (
-//     player.status === PlayerStatus.OwesCard &&
-//     move.moveType !== MoveType.ReturnExtraCard
-// ) {
-//     return Error("Player must return extra card before doing anything else");
-// }
-switch (move.moveType) {
-    case MoveType.Drop:
-        player.points = player.moved ? MIDDLE_DROP_POINTS : INITIAL_DROP_POINTS;
-        break;
-
-    case MoveType.TakeOpen:
-        // XXX TODO handle edge cases
-        if (game.openPile.length === 0) {
-            return Error("No Open cards yet");
-        }
-        game.players[playerIdx].hand.push(game.openPile.splice(-1, 1)[0]);
-        player.status = PlayerStatus.OwesCard;
-        break;
-
-    case MoveType.TakeFromDeck:
-        game.players[playerIdx].hand.push(game.deck.splice(0, 1)[0]);
-        player.status = PlayerStatus.OwesCard;
-        if (game.deck.length === 0) {
-            // Deck has run out
-            // Take all open cards but the top one, shuffle, and use them as deck
-            const tmp = game.openPile.splice(-1, 1);
-            game.deck = shuffleDeck(game.openPile);
-            game.openPile = tmp;
-        }
-        break;
-
-    case MoveType.ReturnExtraCard:
-        if (move.cardDiscarded) {
-            game.openPile.push(move.cardDiscarded);
-        } else {
-            return Error("No card returned");
-        }
-        game.players[playerIdx].hand = game.players[playerIdx].hand.filter(
-            (c) => c !== move.cardDiscarded
-        );
-        player.status = PlayerStatus.Active;
-        break;
-
-    case MoveType.Meld:
-        if (
-            setDiff(
-                new Set(enumerateMeldedHand(move.meldedHand)),
-                new Set(game.players[playerIdx].hand)
-            ).size > 0
-        ) {
-            return Error("Meld contains cards not in your Hand");
-        }
-        game.players[playerIdx].meld = move.meldedHand;
-        break;
-
-    case MoveType.Show:
-        if (
-            !meldedHandMatchesHand(move.meldedHand, game.players[playerIdx].hand)
-        ) {
-            return Error("Wrong Show");
-        }
-        game.players.forEach((p) => {
-            p.status = PlayerStatus.Lost;
-        });
-        player.status = PlayerStatus.Won;
-        break;
-    case MoveType.Finish:
-        game.players.forEach((p, idx) => {
-            p.points = computePoints(game, idx);
-        });
-        game.state = GameState.Finished;
-        break;
-    default:
-        return Error("Unknown move type");
-    //break;
-}
-game.moves.push(move);
-player.moved = true;
-return getRestrictedView(game, playerIdx);
+    const appendMove = pipe(
+        L.id<IGame>(),
+        L.prop('moves'),
+        L.modify(append(move)),
+    )
+    const setMoved = pipe(
+        L.id<IGame>(),
+        L.prop('players'),
+        L.prop(playerIdx),
+        L.prop('moved'),
+        L.modify(() => true),
+    )
+    //     game.moves.push(move);
+    // player.moved = true;
+    // return getRestrictedView(game, playerIdx);
+    return pipe(
+        gameAfterMove,
+        IOE.map(appendMove),
+        IOE.map(setMoved),
+    );
+    // return IOE.left(new Error("mkMove not implemented"));
 }
 
 /**
@@ -672,11 +658,7 @@ return getRestrictedView(game, playerIdx);
  * @returns melded hand
  */
 
-export function checkHand(gameId: number, hand: Hand): IMeldedHand | Error {
-    const game = GAMES[gameId];
-    if (!game) {
-        return Error(`Invalid Game id ${gameId}`);
-    }
+export function checkHand(game: IGame, hand: Hand): IOE.IOEither<Error, IMeldedHand> {
 
-    return Error("Not Implemented Yet");
+    return IOE.left(new Error("Not Implemented Yet"));
 }
