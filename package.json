@@ -1,6 +1,6 @@
 {
   "name": "@mudont/rummy-core",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Typescript library for Indian Rummy Card game",
   "main": "index.js",
   "scripts": {
@@ -26,8 +26,10 @@
     "typescript": "^4.7.4"
   },
   "dependencies": {
+    "@mudont/js-milp-solver": "^0.4.24",
     "assert": "^2.0.0",
     "debug": "^4.3.4",
+    "deep-object-diff": "^1.1.7",
     "fp-ts": "^2.12.1",
     "fp-ts-contrib": "^0.1.29",
     "fp-ts-std": "^0.14.2",

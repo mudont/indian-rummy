@@ -26,7 +26,6 @@ import {
 } from "./types";
 import Dbg from "debug";
 import {
-    gamePlayersLens,
     isJoker,
     getRankOrdinal,
     pointsOfCard,
@@ -37,11 +36,11 @@ import {
     RankOrd,
 } from "./card";
 import { hasDuplicates, allElemsSame, hasDistinctElems, sum, setDiff } from "./util";
-import E from "fp-ts/lib/Either";
+import * as E from "fp-ts/lib/Either";
 import { flow, pipe } from "fp-ts/lib/function";
-import T from "fp-ts/lib/Task";
-import TE from "fp-ts/lib/TaskEither";
-import N from "fp-ts/number"
+import * as T from "fp-ts/lib/Task";
+import * as TE from "fp-ts/lib/TaskEither";
+import * as N from "fp-ts/number"
 import { traceWithValue, trace } from "fp-ts-std/Debug";
 import { Do } from "fp-ts-contrib/lib/Do";
 import { append, appendW, dropLeft, reduce, sort, map, mapWithIndex, filter } from "fp-ts/lib/ReadonlyArray";
@@ -50,6 +49,11 @@ import * as IO from "fp-ts/lib/IO";
 import * as IOE from "fp-ts/lib/IOEither";
 import { guard } from 'fp-ts-std/Function'
 import * as L from "monocle-ts/Lens"
+import { indexArray } from "monocle-ts/lib/Index/Array"
+import * as RA from "fp-ts/lib/ReadonlyArray";
+import { indexReadonlyArray } from 'monocle-ts/lib/Index/ReadonlyArray'
+
+import { Lens, Prism, fromTraversable } from 'monocle-ts'
 
 const debug = Dbg("app:cards");
 
@@ -71,24 +75,14 @@ export function cardsInSequence(seq: ISequence | ILife): readonly Card[] {
         seq.ranks
     );
 }
+
 /**
- * Get the view of Game that the player is allowed to see
- * Player is not allowed to see the deck and other players' hands
- * @param game
- * @param playerIdx
+ * get cards from a ITriplet
+ * @param trip
  * @returns
  */
-function getRestrictedView(game: IGame, playerIdx: number) {
-    const restrictedPlayers = R.map(R.omit(["hand", "meld"]))(game.players);
-    const limitedGame = R.set(gamePlayersLens, restrictedPlayers, game);
-    return {
-        ...R.omit(
-            ["deck"],
-            limitedGame as GameRestricted
-        ),
-        myHand: playerIdx >= 0 ? game.players[playerIdx].hand : undefined,
-        myMeld: playerIdx >= 0 ? game.players[playerIdx].meld : undefined,
-    }
+function cardsInTriplet(trip: ITriplet): readonly Card[] {
+    return R.map((s: NonJokerSuit) => mkCard(s as Suit, trip.rank))(trip.suits);
 }
 
 /**
@@ -129,9 +123,9 @@ export function mkGame(
                     deck: usedDeck,
                     players,
                     openPile: [openCard],
-                    currJoker: joker,
+                    wcJoker: joker,
                     state: GameState.Active,
-                    turnPlayer: players[0],
+                    turnPlayer: players[0].user,
                     moves: [],
                 };
                 return IOE.right(game);
@@ -144,13 +138,38 @@ export function mkGame(
 }
 
 /**
- * Make a Rummy sequence from cards in context of game (to know currentJoker)
+ * Get the view of Game that the player is allowed to see
+ * Player is not allowed to see the deck and other players' hands
  * @param game
+ * @param playerIdx
+ * @returns
+ */
+export function getRestrictedView(game: IGame, playerIdx: number): E.Either<Error, GameRestricted> {
+
+    const gamePlayersLens = R.lens(R.prop('players')<unknown>, R.assoc('players'));
+    const restrictedPlayers = R.map(R.omit(["hand", "meld"]))(game.players);
+
+    const limitedGame = R.set(gamePlayersLens, restrictedPlayers, game);
+    const err = E.left(new Error("Invalid player index"));
+    const ret = playerIdx >= 0 && playerIdx < game.players.length ? E.right({
+        ...R.omit(
+            ["deck"],
+            limitedGame as GameRestricted
+        ),
+        myHand: game.players[playerIdx].hand,
+        myMeld: game.players[playerIdx].meld,
+    }) : err;
+    return ret;
+}
+
+/**
+ * Make a Rummy sequence from cards in context of game (to know currentJoker)
+ * @param wcJoker: CardI
  * @param cards
  * @returns ISequence or error if a valid sequence is not possible
  */
 export function mkSequence(
-    game: GameRestricted,
+    wcJoker: Card,
     cards: readonly Card[]
 ): E.Either<Error, ISequence> {
     const numCards: number = cards.length;
@@ -179,33 +198,42 @@ export function mkSequence(
 
     return pipe(
         E.of(cards.length),
-        E.bind('nCards', E.fromPredicate(R.lt(3), () => new Error("Sequence must have at least 3 cards"))),
-        E.bind('nonJokers', () => E.of(cards.filter((c) => !isJoker(game.currJoker)(c)))),
-        E.bind('numCards', (() => E.of(cards.length))),
-        E.bind('numJokers', ({ nonJokers }: Readonly<{ readonly nonJokers: readonly Card[] }>) =>
-            E.of(numCards - nonJokers.length)),
+        E.bind('nCards',
+            E.fromPredicate(R.lt(3), () => new Error("Sequence must have at least 3 cards"))),
+        E.bind('nonJokers',
+            () => E.of(cards.filter((c) => !isJoker(wcJoker)(c)))),
+        E.bind('numCards',
+            (() => E.of(cards.length))),
+        E.bind('numJokers',
+            ({ nonJokers }: Readonly<{ readonly nonJokers: readonly Card[] }>) =>
+                E.of(numCards - nonJokers.length)),
         E.chain(E.fromPredicate(({ nonJokers }) =>
             R.all((a: Card) => a.suit === nonJokers[0].suit)(nonJokers),
             () => new Error("Sequence must have single suit"))
         ),
-        E.bind('sortedNonJokers', ({ nonJokers }) => E.of(sort(RankOrd)(nonJokers))),
-        E.bind('ordinals', ({ sortedNonJokers }) => E.of(sortedNonJokers.map(c => getRankOrdinal(c.rank)))),
+        E.bind('sortedNonJokers',
+            ({ nonJokers }) => E.of(sort(RankOrd)(nonJokers))),
+        E.bind('ordinals',
+            ({ sortedNonJokers }) => E.of(sortedNonJokers.map(c => getRankOrdinal(c.rank)))),
         E.chain(E.fromPredicate(({ ordinals }) =>
             !hasDuplicates(ordinals),
             () => new Error("Sequence must have distinct ranks"))
         ),
-        E.bind('aceCloserToLastCardThanFirst', ({ ordinals }) =>
-            E.of(haveAce(ordinals) && (ordinals[1] - ordinals[0]) > (14 - ordinals[ordinals.length - 1]))
+        E.bind('aceCloserToLastCardThanFirst',
+            ({ ordinals }) =>
+                E.of(haveAce(ordinals) && (ordinals[1] - ordinals[0]) > (14 - ordinals[ordinals.length - 1]))
         ),
-        E.bind('ordinalsToCheck', ({ ordinals, aceCloserToLastCardThanFirst }) => E.of(guard([
-            [isNotPluralArr, (ordinals) => ordinals],
-            [() => aceCloserToLastCardThanFirst, ordinals => append(ordinals[0])(dropLeft(1)(ordinals))],
-        ])(R.identity)(ordinals) as readonly number[])),
+        E.bind('ordinalsToCheck',
+            ({ ordinals, aceCloserToLastCardThanFirst }) => E.of(guard([
+                [isNotPluralArr, (ordinals) => ordinals],
+                [() => aceCloserToLastCardThanFirst, ordinals => append(ordinals[0])(dropLeft(1)(ordinals))],
+            ])(R.identity)(ordinals) as readonly number[])),
         E.chain(E.fromPredicate(({ ordinalsToCheck, numJokers }: Pick<IScope, "ordinalsToCheck" | "numJokers">) =>
             ordinalsToCheck[ordinalsToCheck.length - 1] - ordinalsToCheck[0] + 1 === ordinalsToCheck.length + numJokers,
             () => new Error("Have neither consecutive ranks nor enough jokers to fill gaps"))
         ),
-        E.bind('ranks', ({ nonJokers }) => E.of(nonJokers.map((c) => c.rank))),
+        E.bind('ranks',
+            ({ nonJokers }) => E.of(nonJokers.map((c) => c.rank))),
         E.chain(
             ({ nonJokers, numJokers, ranks }: IScope) => E.right({ suit: nonJokers[0].suit, ranks, numJokers })
         )
@@ -214,13 +242,13 @@ export function mkSequence(
 
 /**
  * Make a Life - a sequence without jokers
- * @param game
+ * @param wcJoker
  * @param cards
  * @returns
  */
-export function mkLife(game: GameRestricted, cards: readonly Card[]): E.Either<Error, ILife> {
+export function mkLife(wcJoker: Card, cards: readonly Card[]): E.Either<Error, ILife> {
     return pipe(
-        mkSequence(game, cards),
+        mkSequence(wcJoker, cards),
         E.chain(E.fromPredicate(
             (seq) => seq.numJokers === 0,
             () => new Error("Life sequence cannot have jokers"))
@@ -233,12 +261,12 @@ export function mkLife(game: GameRestricted, cards: readonly Card[]): E.Either<E
 
 /**
  * Make a Triplet from given cards in context of game
- * @param game
+ * @param wcJoker
  * @param cards
  * @returns ITriplet or Error
  */
 export function mkTriplet(
-    game: GameRestricted,
+    wcJoker: Card,
     cards: readonly Card[]
 ): E.Either<Error, ITriplet> {
     interface IScope {
@@ -252,7 +280,7 @@ export function mkTriplet(
         () => E.of(cards.length),
         E.chain(E.fromPredicate(R.lt(3), () => new Error("Triplet must have at least 3 cards"))),
         E.chain(E.fromPredicate(R.gte(4), () => new Error("Triplet must have at most 4 cards"))),
-        E.bind('nonJokers', () => E.of(cards.filter((c) => !isJoker(game.currJoker)(c)))),
+        E.bind('nonJokers', () => E.of(cards.filter((c) => !isJoker(wcJoker)(c)))),
         E.bind('numJokers', ({ nonJokers }: Readonly<{ readonly nonJokers: readonly Card[] }>) =>
             E.of(cards.length - nonJokers.length)),
         E.bind('suits', ({ nonJokers }) => E.of(nonJokers.map((c) => c.suit))),
@@ -277,7 +305,7 @@ export function mkTriplet(
  * @param triplets
  * @returns
  */
-export function mkMeldedHand(
+export function mkWinningHand(
     sequences: readonly ISequence[],
     triplets: readonly ITriplet[]
 ): E.Either<Error, IMeldedHand> {
@@ -310,15 +338,6 @@ export function mkMeldedHand(
             sequences: sequences.filter((s) => s.numJokers > 0),
         })),
     )
-}
-
-/**
- * get cards from a ITriplet
- * @param trip
- * @returns
- */
-function cardsInTriplet(trip: ITriplet): readonly Card[] {
-    return R.map((s: NonJokerSuit) => mkCard(s as Suit, trip.rank))(trip.suits);
 }
 
 /**
@@ -465,23 +484,68 @@ export function playerFinished(p: IPlayer): boolean {
  */
 export function mkMove(
     game: IGame,
-    user: UserId,
     move: IMove
 ): IOE.IOEither<Error, IGame> {
     type CondLeft = (value: MoveType) => value is MoveType;
     type CondRight = (value: MoveType) => IGame;
     const playerIdx = R.findIndex(
-        R.propEq("user", user),
+        R.propEq("user", move.player),
         game.players
     );
-    const gameAfterMove: IOE.IOEither<Error, IGame> = pipe(
+
+    /**
+     * Chamge turn to next active player
+     */
+    const nextTurn = (currPlayer: UserId) => (g: IGame): UserId => {
+        // const currPlayer = game.players[currTurn].user;
+        const players: readonly IPlayer[] = RA.filter<IPlayer>(
+            (p: IPlayer) => p.status === PlayerStatus.Active || p.user === currPlayer)(g.players)
+        const currPlayerIdx = R.findIndex(a => a.user === currPlayer, players);
+        const nextPlayerIdx = (currPlayerIdx + 1) % players.length;
+        return players[nextPlayerIdx].user;
+    }
+
+    const bumpTurn = (g: IGame) => Lens.fromProp<IGame>()('turnPlayer').set(nextTurn(g.turnPlayer)(g))
+
+    // Lenses for modifying game state
+    // TODO: No rush, but Replace R Lenses with fp-ts lenses
+    const lensHand = R.lensPath<IGame, Hand>(["players", playerIdx, "hand"]);
+    const lensOpenPile = R.lensPath<IGame, readonly Card[]>(["openPile"]);
+    const lensDeck = R.lensPath<IGame, Deck>(["deck"]);
+    const lensPoints = R.lensPath<IGame, number>(["players", playerIdx, "points"]);
+    const removeCardFromDiscardedPile = pipe(
+        L.id<IGame>(),
+        L.prop('openPile'),
+        L.modify(R.drop(1)),
+    )
+    const appendMove = pipe(
+        L.id<IGame>(),
+        L.prop('moves'),
+        L.modify(append(move)),
+    )
+    const setMoved = Lens.fromProp<IGame>()('players')
+        .composeOptional(
+            indexReadonlyArray<IPlayer>().index(playerIdx)
+        )
+        .composeLens(Lens.fromProp<IPlayer>()('moved'))
+        .set(true);
+
+    return pipe(
         game,
         IOE.fromPredicate((game: IGame) => game.state === GameState.Active, () =>
             new Error("Game is not active")
         ),
+        IOE.chain(
+            IOE.fromPredicate((game: IGame) => game.turnPlayer === move.player, () => {
+                // eslint-disable-next-line functional/no-expression-statement
+                // console.log(`${move.player}, it is not your turn`)
+                return new Error(`${move.player} can't play ${game.turnPlayer}'s turn`)
+            }
+            )
+        ),
         IOE.bind('playerIdx', () => {
             const ix = R.findIndex(
-                R.propEq("user", user),
+                R.propEq("user", move.player),
                 game.players
             );
             return ix < 0 ? IOE.left(new Error("Player is not in game")) : IOE.right(ix)
@@ -498,19 +562,17 @@ export function mkMove(
         }),
         IOE.chain(
             ({ playerIdx, player }): IOE.IOEither<Error, IGame> => {
-                const lensHand = R.lensPath<IGame, Hand>(["players", playerIdx, "hand"]);
-                const lensOpenPile = R.lensPath<IGame, readonly Card[]>(["openPile"]);
-                const lensDeck = R.lensPath<IGame, Deck>(["deck"]);
-                const lensPoints = R.lensPath<IGame, number>(["players", playerIdx, "points"]);
-                const removeCardFromDiscardedPile = pipe(
-                    L.id<IGame>(),
-                    L.prop('openPile'),
-                    L.modify(R.drop(1)),
-                )
                 const ret: IOE.IOEither<Error, IGame> = guard([
-                    [R.equals(MoveType.Drop) as CondLeft, () => {
-                        return IOE.right(R.set(lensPoints, player.moved ? MIDDLE_DROP_POINTS : INITIAL_DROP_POINTS, game))
-                    }],
+                    // Drop
+                    [R.equals(MoveType.Drop) as CondLeft, () =>
+                        pipe(
+                            game,
+                            R.set(lensPoints, player.moved ? MIDDLE_DROP_POINTS : INITIAL_DROP_POINTS),
+                            bumpTurn(game),
+                            IOE.right
+                        )
+                    ],
+                    // TakeOpen
                     [R.equals(MoveType.TakeOpen) as CondLeft, () => {
                         return IOE.right(pipe(
                             game,
@@ -519,6 +581,7 @@ export function mkMove(
                             removeCardFromDiscardedPile,
                         ))
                     }],
+                    // TakeFromDeck
                     [R.equals(MoveType.TakeFromDeck) as CondLeft, () => {
                         const g1 = pipe(
                             game,
@@ -540,41 +603,44 @@ export function mkMove(
                             ))
 
                     }],
+                    // ReturnExtraCard
                     [R.equals(MoveType.ReturnExtraCard) as CondLeft, () => {
                         const valid = 'cardDiscarded' in move && move.cardDiscarded;
                         return valid ?
-                            (() => {
+                            ((move) => {
                                 const setOwesCard = pipe(
                                     L.id<IGame>(),
                                     L.prop('openPile'),
                                     L.modify(append(move.cardDiscarded)),
                                 );
-                                const setHand = pipe(
-                                    L.id<IGame>(),
-                                    L.prop('players'),
-                                    L.prop(playerIdx),
-                                    L.prop('hand'),
-                                    L.modify(filter(c => c !== move.cardDiscarded)));
-
-                                const setPlayerStatus = pipe(
-                                    L.id<IGame>(),
-                                    L.prop('players'),
-                                    L.prop(playerIdx),
-                                    L.prop('status'),
-                                    L.modify(s => PlayerStatus.Active));
-                                return IOE.right(pipe(game, setOwesCard, setHand, setPlayerStatus));
-                            })() :
+                                const setHand = Lens.fromProp<IGame>()('players')
+                                    .composeOptional(
+                                        indexReadonlyArray<IPlayer>().index(playerIdx)
+                                    )
+                                    .composeLens(Lens.fromProp<IPlayer>()('hand'))
+                                    .modify(filter(c => c !== move.cardDiscarded))
+                                const setPlayerStatus = Lens.fromProp<IGame>()('players')
+                                    .composeOptional(
+                                        indexReadonlyArray<IPlayer>().index(playerIdx)
+                                    )
+                                    .composeLens(Lens.fromProp<IPlayer>()('status'))
+                                    .set(PlayerStatus.Active);
+                                return pipe(game, setOwesCard, setHand, setPlayerStatus, bumpTurn(game), IOE.right);
+                            })(move) :
                             IOE.left(new Error("Player must discard card before returning extra card"))
                     }],
+                    // Meld
                     [R.equals(MoveType.Meld) as CondLeft, () => {
                         // to satisfy typechecker
                         const mv: IMoveMeld = move as IMoveMeld;
-                        const setMeld = pipe(
-                            L.id<IGame>(),
-                            L.prop('players'),
-                            L.prop(playerIdx),
-                            L.prop('meld'),
-                            L.modify(m => mv.meldedHand));
+
+                        const setMeld = Lens.fromProp<IGame>()('players')
+                            .composeOptional(
+                                indexReadonlyArray<IPlayer>().index(playerIdx)
+                            )
+                            .composeLens(Lens.fromProp<IPlayer>()('meld'))
+                            .set(mv.meldedHand);
+
                         const meldUsesValidCards = setDiff(
                             new Set(enumerateMeldedHand(mv.meldedHand)),
                             new Set(game.players[playerIdx].hand)
@@ -583,6 +649,7 @@ export function mkMove(
                             IOE.left(new Error("Meld contains cards not in your Hand")) :
                             IOE.right(pipe(game, setMeld))
                     }],
+                    // Show
                     [R.equals(MoveType.Show) as CondLeft, () => {
                         const cleanShow = 'meldedHand' in move &&
                             meldedHandMatchesHand(move.meldedHand, game.players[playerIdx].hand)
@@ -594,7 +661,7 @@ export function mkMove(
                                 const setStatus = pipe(
                                     L.id<IPlayer>(),
                                     L.prop('status'),
-                                    L.modify(s => status),
+                                    L.modify(() => status),
                                 );
                                 return pipe(p, setStatus);
                             })));
@@ -602,12 +669,12 @@ export function mkMove(
                             IOE.left(new Error("Meld does not match your hand")) :
                             IOE.right(pipe(game, setWinnerLosers));
                     }],
+                    // Finish
                     [R.equals(MoveType.Finish) as CondLeft, () => {
                         const setPoints = pipe(
                             L.id<IGame>(),
                             L.prop('players'),
                             L.modify(mapWithIndex((i, p) => {
-                                const status = i === playerIdx ? PlayerStatus.Won : PlayerStatus.Lost;
                                 const setPoints = pipe(
                                     L.id<IPlayer>(),
                                     L.prop('points'),
@@ -616,49 +683,191 @@ export function mkMove(
                                 return pipe(p, setPoints);
                             })));
 
-                        return IOE.right(game)
+                        return IOE.right(setPoints(game))
                     }],
                 ])(() => IOE.left(new Error("Unknown move type")))(move.moveType);
                 return ret;
                 //return updatedGame instanceof Error ? IOE.left(updatedGame) : IOE.right(updatedGame);
             }
         ),
-    )
-    const appendMove = pipe(
-        L.id<IGame>(),
-        L.prop('moves'),
-        L.modify(append(move)),
-    )
-    const setMoved = pipe(
-        L.id<IGame>(),
-        L.prop('players'),
-        L.prop(playerIdx),
-        L.prop('moved'),
-        L.modify(() => true),
-    )
-    //     game.moves.push(move);
-    // player.moved = true;
-    // return getRestrictedView(game, playerIdx);
-    return pipe(
-        gameAfterMove,
         IOE.map(appendMove),
         IOE.map(setMoved),
-    );
-    // return IOE.left(new Error("mkMove not implemented"));
+    )
 }
-
+/**
+  * Possible algorithm for checking potential winning hand:
+  *
+  * Look for possible pure sequences of cards in the hand. Sorting by suit and and rank should help
+  *
+  * For each Suit,
+  *
+  * The 12 possible pure 3-sequences are:
+  * A23, 234, 345, 456, 567, 678, 789, 89J, 9TJ, TJQ, JQK, QKA
+  *
+  * The 11 pure 4-sequences are:
+  * A234, 2345, 3456, 4567, 5678, 6789, 789T, 89TJ, 9TJQ, TJQK, JQKA
+  *
+  * The 10 pure 5-sequences are:
+  * *Filled by Copilot. cool!*
+  * A2345, 23456, 34567, 45678, 56789, 6789T, 789TJ, 89TJQ, 9TJQK, TJQKA
+  *===============================================================================================
+  * The 13 + 12 = 25 possible 3-sequences with 1 joker are:
+  * 13 pairs
+  * 12 pure 3-aeq with middle card missing
+  *
+  * The 13 possible 3-sequences with 2 jokers are:
+  * 13 singles
+  *--------------------------------------------------------------------------------------------
+  * The (12 + 11*2)= 34 4-sequences with 1 joker are:
+  * 12 pure 3-sequences
+  * 11 pure 4-seq with any one of 2 middle cards missing
+  *
+  *
+  * The (25+11)=36 4-sequences with 2 joker are:
+  * 25 3-sequences with 1 joker
+  * 11 pure 4-seq with two of 2 middle cards missing
+  *
+  * The 13 4-sequences with 3 joker are:
+  * A,   2,   3,   4,   5,   6,   7,   8,   9,   T,   J,   Q,   K
+  *--------------------------------------------------------------------------------------------
+  * The (11+ 3*10)= 41 5-sequences with 1 joker are:
+  * 11 pure 4-seq
+  * 10 pure 5-seq with any one middle card out of 3 missing . 3 ways to do this
+  *
+  *
+  * The (34 + 10*30)=64 5-sequences with 2 joker are:
+  * 34 4-seq with 1 joker
+  * 10 pure 5-seq with any 2 of 3 missing (3C2 = 3)
+  *
+  * The (13 + 12 + 36+ 10)=71 5-sequences with 3 joker are:
+  * 36 4-seq with 2 joker
+  * 10 pure 5-seq with any 3 of 3 missing (1 way)
+  *
+  * The 13 5-sequences with 4 joker are:
+  * 13 singles
+  *
+  *--------------------------------------------------------------------------------------------
+  * Above repeated for each suit
+  * 1372 sequences total
+  * =============================================================================================
+  * 4 pure 3-triplets
+  * 1 pure quadruplet
+  * 4C2=6 triplets with 1 joker
+  * 4C1=4 triplets with 2 joker
+  * 4C3=4 quadruplets with 1 joker
+  * 4C2=6 quadruplets with 2 joker
+  * 4C1=4 quadruplets with 3 joker
+  * 13 * (4 + 1 + 6 + 4 +4+6+4)= 377 triplets total
+  * 1372 + 377 = 1749 sets total
+  * =============================================================================================
+  * NOTE: sequences of 6 or more cards can be ignored,
+  * since the 3 extra cards can always be made into their own
+  * sequence. THus there is no risk of orphaning cards that could have been
+  * tacked on to the end ofanother sequence
+  *
+  * We can check for each of the above 33 x 4 (suits) = 132 sequences in the hand.
+  * If none found, return with error "No pure sequence (life) found"
+  * Else continue.
+  *
+  * For each pure 3/4/5-sequence found,
+  * check  if at least one other sequence with or without joker
+  * can be made from the remaining cards.
+  * If not found, return with error "No second sequence found"
+  * Else continue searching remaining cards
+  * for each potential life and 2nd-sequence discovered
+  *
+  * Look for 3/4/5-sequences with or without joker or
+  * triplets/quadruplets with or without joker
+  *
+  * High level algorithm:
+  * For each posible pure 3/4/5-sequence,
+  *   For each other 3/4/5-sequence with or without joker
+  *      For each other 3/4/5-sequence or triplet/quadruplet with or without joker
+  *         if less than 3 cards left, fail
+  *        else if remaining cards make a valid sequence wowj, or triplet/quadruplet wowj
+  *             return success
+  *
+  * Helper functions:
+  * - Partition hand by suit (for sequence checking).  sort within suit by rank
+  *   Jokers should a "suit" of their own.
+  * - Partition hand by rank (for triplets)
+  * - check for sequence
+  *   diff
+  *   if sum of diffs is <= numJokers, return true
+  * - check for triplet within rank
+  *   if numDistinctSuits + numJokers is >= 3, return true
+  *
+  * More detailed algorithm:
+  * const lifePlusRests: [[life, rest]] = getLifes(hand);
+  * error if no life found
+  * const lifeSeq2Rests: [[left, seq2, rest]] = map(getSequences(rest), lifePlusRests)
+  * error if no seq2 found
+  * const lifeSeq2Set3Rests: [[left, seq2, set3, rest]] = \
+  *       map(geSequences(rest), lifeSeq2Rests) +
+  *       map(getTriplets(rest), lifeSeq2Rests)
+  * error if no set3 found
+  * If rest is empty, return success
+  * if validSequence(rest), return success
+  * If validTriplet(rest), return success
+  * else return error
+  *
+  *
+  * error if no set4 found
+  * success!
+  *
+  * getLifes
+  *   filter out jokerts and calle getSequences
+  *
+  * getSequences(hand, wantPure?)
+  *   const [cRanks, dRanks, hRanks, sRanks, jokers] = partitionBySuit(hand);
+  *   usableJokers = wantPure ? [] : jokers;
+  *   allRankSeqs =
+  *     getRankSequences(cRanks, usableJokers) +
+  *     getRankSequences(dRanks, usableJokers) +
+  *     getRankSequences(hRanks, usableJokers) +
+  *     getRankSequences(sRanks, usableJokers)
+  *   return map(toSequence, allRankSeqs)
+  *
+  * getTriplets(hand)
+  *  const partition = partitionByRank(hand);
+  *
+  * getRankSequences(ranks, jokers)
+  *   ordinals = map(rankToOrdinal, ranks)
+  *
+  */
 /**
  * Check if this is a winning hand.
+ * TODO: Implement. Some pointers in links below.
  * https://stackoverflow.com/questions/51225335/determine-if-an-indian-rummy-hand-is-a-winning-hand-java
  * http://pds2.egloos.com/pds/200611/17/89/solving%20rummikub%20problems%20by%20integer%20linear%20programming.pdf
  * Rules:
  * At least
- * @param gameId
- * @param hand
- * @returns melded hand
+ * @param wcJoker: Card
+ * @param hand: Hand - The hand to check
+ * @returns melded hand if it is a winning hand, error otherwise
  */
 
-export function checkHand(game: IGame, hand: Hand): IOE.IOEither<Error, IMeldedHand> {
+export function checkIfWinningHand(wcJoker: Card, hand: Hand): E.Either<Error, IMeldedHand> {
 
-    return IOE.left(new Error("Not Implemented Yet"));
+    return E.left(new Error("Not Implemented Yet"));
+}
+
+/**
+ * Find size of gaps that prevent foming a sequence from a sorted array of numbers.
+ * Array of consecutive numbers will produce all zeros.
+ * @param ns: readonly number[]. array of numbers
+ * @returns readonly number[]. Size of gaps in consecurtive numbers
+ */
+export function sequenceGaps(ns: readonly number[]): readonly number[] {
+    return mapWithIndex<number, number>((i, n) => i === 0 ? 0 : n - ns[i - 1] - 1)(ns);
+}
+export function removeDups(ns: readonly number[]): readonly number[] {
+    return RA.sort(N.Ord)(Array.from(new Set(ns)));
+}
+
+export function getRankSequences(ranks: readonly Rank[], maxJokers: number): readonly Rank[] {
+    const ordinals = map(getRankOrdinal)(ranks);
+    const diffs = flow(removeDups, sequenceGaps)(ordinals);
+
+    return []
 }

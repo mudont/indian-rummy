@@ -12,10 +12,11 @@ import * as IO from "fp-ts/lib/IO";
 //-------------------------------=============================================
 /**
  *
- * @param game
- * @returns a function that takes a card and determines if that card is a joker for this game
+ * @param wcJoker
+ * @returns a function that takes a card and determines if that card is a joker
+ *          for a game with given wildcard joker
  */
-export const isJoker = (gameJoker: Card) => (card: Card): boolean => card === gameJoker || card.suit === Suit.Joker;
+export const isJoker = (wcJoker: Card) => (card: Card): boolean => card === wcJoker || card.suit === Suit.Joker;
 /**
  * Get sortable integer value for given Card Rank
  * @param rank
@@ -60,7 +61,6 @@ export const serializeCard = cardToJSON;
 
 export const deserializeCard = mkCard;
 
-export const gamePlayersLens = R.lens(R.prop('players')<any>, R.assoc('players'));
 
 /**
  * get Points for Card

@@ -1,8 +1,8 @@
 Arguments: 
-  /usr/local/Cellar/node/18.6.0/bin/node /usr/local/bin/yarn add @types/fp-ts-contrib
+  /usr/local/Cellar/node/18.6.0/bin/node /usr/local/bin/yarn add @types/javascript-lp-solver
 
 PATH: 
-  /Users/murali/anaconda3/bin:/Users/murali/.cabal/bin:/Users/murali/.ghcup/bin:/Users/murali/.nix-profile/bin:/Users/murali/Downloads/google-cloud-sdk/bin:/Users/murali/.local/bin:/usr/local/opt/gnu-tar/libexec/gnubin:/usr/local/anaconda3/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Library/TeX/texbin:/Library/Apple/usr/bin:/Users/murali/.cargo/bin
+  /Users/murali/anaconda3/bin:/Users/murali/.cabal/bin:/Users/murali/.ghcup/bin:/Users/murali/.nix-profile/bin:/Users/murali/Downloads/google-cloud-sdk/bin:/Users/murali/.local/bin:/usr/local/opt/gnu-tar/libexec/gnubin:/usr/local/anaconda3/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Library/TeX/texbin:/Library/Apple/usr/bin:/Users/murali/anaconda3/bin:/Users/murali/.cabal/bin:/Users/murali/.ghcup/bin:/Users/murali/.nix-profile/bin:/Users/murali/Downloads/google-cloud-sdk/bin:/Users/murali/.local/bin:/usr/local/opt/gnu-tar/libexec/gnubin:/usr/local/anaconda3/bin:/Users/murali/.cargo/bin
 
 Yarn version: 
   1.22.4
@@ -14,7 +14,7 @@ Platform:
   darwin x64
 
 Trace: 
-  Error: https://registry.yarnpkg.com/@types%2ffp-ts-contrib: Not found
+  Error: https://registry.yarnpkg.com/@types%2fjavascript-lp-solver: Not found
       at params.callback [as _callback] (/Users/murali/.config/yarn/global/node_modules/yarn/lib/cli.js:66987:18)
       at self.callback (/Users/murali/.config/yarn/global/node_modules/yarn/lib/cli.js:140748:22)
       at Request.emit (node:events:513:28)
@@ -57,9 +57,12 @@ npm manifest:
     "dependencies": {
       "assert": "^2.0.0",
       "debug": "^4.3.4",
+      "deep-object-diff": "^1.1.7",
       "fp-ts": "^2.12.1",
       "fp-ts-contrib": "^0.1.29",
       "fp-ts-std": "^0.14.2",
+      "javascript-lp-solver": "^0.4.24",
+      "monocle-ts": "^2.3.13",
       "ramda": "^0.28.0"
     },
     "repository": {
@@ -1224,6 +1227,11 @@ Lockfile:
     resolved "https://registry.yarnpkg.com/deep-is/-/deep-is-0.1.4.tgz#a6f2dce612fadd2ef1f519b73551f17e85199831"
     integrity sha512-oIPzksmTg4/MriiaYGO+okXDT7ztn/w3Eptv/+gSIdMdKsJo0u4CfYNFJPy+4SKMuCqGw2wxnA+URMg3t8a/bQ==
   
+  deep-object-diff@^1.1.7:
+    version "1.1.7"
+    resolved "https://registry.yarnpkg.com/deep-object-diff/-/deep-object-diff-1.1.7.tgz#348b3246f426427dd633eaa50e1ed1fc2eafc7e4"
+    integrity sha512-QkgBca0mL08P6HiOjoqvmm6xOAl2W6CT2+34Ljhg0OeFan8cwlcdq8jrLKsBBuUFAZLsN5b6y491KdKEoSo9lg==
+  
   deepmerge-ts@^4.0.3:
     version "4.2.1"
     resolved "https://registry.yarnpkg.com/deepmerge-ts/-/deepmerge-ts-4.2.1.tgz#104fe27c91abde4597bad1dcfd00a7a8be22d532"
@@ -2031,6 +2039,11 @@ Lockfile:
       html-escaper "^2.0.0"
       istanbul-lib-report "^3.0.0"
   
+  javascript-lp-solver@^0.4.24:
+    version "0.4.24"
+    resolved "https://registry.yarnpkg.com/javascript-lp-solver/-/javascript-lp-solver-0.4.24.tgz#3bb5f8aa051f0bf04747e39130133a0f738f635c"
+    integrity sha512-5edoDKnMrt/u3M6GnZKDDIPxOyFOg+WrwDv8mjNiMC2DePhy2H9/FFQgf4ggywaXT1utvkxusJcjQUER72cZmA==
+  
   jest-changed-files@^28.1.3:
     version "28.1.3"
     resolved "https://registry.npmjs.org/jest-changed-files/-/jest-changed-files-28.1.3.tgz"
@@ -2529,6 +2542,11 @@ Lockfile:
     integrity sha512-J7p63hRiAjw1NDEww1W7i37+ByIrOWO5XQQAzZ3VOcL0PNybwpfmV/N05zFAzwQ9USyEcX6t3UO+K5aqBQOIHw==
     dependencies:
       brace-expansion "^1.1.7"
+  
+  monocle-ts@^2.3.13:
+    version "2.3.13"
+    resolved "https://registry.yarnpkg.com/monocle-ts/-/monocle-ts-2.3.13.tgz#7c8af489613cd5175df2ea3c02c57c6151995e5d"
+    integrity sha512-D5Ygd3oulEoAm3KuGO0eeJIrhFf1jlQIoEVV2DYsZUMz42j4tGxgct97Aq68+F8w4w4geEnwFa8HayTS/7lpKQ==
   
   ms@2.1.2:
     version "2.1.2"
