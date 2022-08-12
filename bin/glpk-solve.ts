@@ -8,7 +8,7 @@ import { Card, Deck, Rank, Suit } from "../src/types";
 import * as IOE from "fp-ts/lib/IOEither";
 import * as E from "fp-ts/lib/Either";
 import { countBy } from "fp-ts-std/ReadonlyArray";
-import * as GLPK from 'glpk.js';
+import { GLPK } from 'glpk.js';
 const glpk = GLPK();
 const options = {
     msglev: glpk.GLP_MSG_ALL,
