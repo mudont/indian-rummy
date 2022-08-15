@@ -1,4 +1,4 @@
-import { Solve, Solution, IModel } from "@mudont/js-milp-solver";
+// import { Solve, Solution, IModel } from "@mudont/js-milp-solver";
 import { readonlyArray } from "fp-ts";
 import { flatten, map, mapWithIndex, replicate } from "fp-ts/lib/readonlyArray";
 import { identity, pipe } from "fp-ts/lib/function";
@@ -123,95 +123,95 @@ console.log(`deck: ${JSON.stringify(deck)}`);
 // eslint-disable-next-line functional/no-expression-statement
 console.log(`hand: ${JSON.stringify(hand)}`);
 
-const rummyModel: IModel = {
-    "optimize": "points",
-    "opType": "max",
-    "constraints": {
-        "CA_hms": { "equal": 0 },
-        "C2_hms": { "equal": 0 },
-        "C3_hms": { "equal": 0 },
-        "DA_hms": { "equal": 0 },
-        "D2_hms": { "equal": 0 },
-        "D3_hms": { "equal": 0 },
+// const rummyModel: IModel = {
+//     "optimize": "points",
+//     "opType": "max",
+//     "constraints": {
+//         "CA_hms": { "equal": 0 },
+//         "C2_hms": { "equal": 0 },
+//         "C3_hms": { "equal": 0 },
+//         "DA_hms": { "equal": 0 },
+//         "D2_hms": { "equal": 0 },
+//         "D3_hms": { "equal": 0 },
 
-        "x0": { "min": 0, "max": n },
-        "x1": { "min": 0, "max": n, },
-        "x2": { "min": 0, "max": n, },
-        "x3": { "min": 0, "max": n, },
-        "x4": { "min": 0, "max": n, },
-        "x5": { "min": 0, "max": n, },
-        "x6": { "min": 0, "max": n, },
-        "x7": { "min": 0, "max": n, },
-        "x8": { "min": 0, "max": n, },
+//         "x0": { "min": 0, "max": n },
+//         "x1": { "min": 0, "max": n, },
+//         "x2": { "min": 0, "max": n, },
+//         "x3": { "min": 0, "max": n, },
+//         "x4": { "min": 0, "max": n, },
+//         "x5": { "min": 0, "max": n, },
+//         "x6": { "min": 0, "max": n, },
+//         "x7": { "min": 0, "max": n, },
+//         "x8": { "min": 0, "max": n, },
 
-        "y0": { "min": 0, "max": Math.min(hand[0], n), },
-        "y1": { "min": 0, "max": Math.min(hand[1], n), },
-        "y2": { "min": 0, "max": Math.min(hand[2], n), },
-        "y3": { "min": 0, "max": Math.min(hand[3], n), },
-        "y4": { "min": 0, "max": Math.min(hand[4], n), },
-        "y5": { "min": 0, "max": Math.min(hand[5], n), }
-    },
-    "variables": {
-        "x0": { "CA_hms": 1, "C2_hms": 1 },
-        "x1": { "C2_hms": 1, "C3_hms": 1 },
-        "x2": { "C3_hms": 1, "CA_hms": 1 },
-        "x3": { "DA_hms": 1, "D2_hms": 1 },
-        "x4": { "D2_hms": 1, "D3_hms": 1 },
-        "x5": { "D3_hms": 1, "DA_hms": 1 },
-        "x6": { "CA_hms": 1, "DA_hms": 1 },
-        "x7": { "C2_hms": 1, "D2_hms": 1 },
-        "x8": { "C3_hms": 1, "D3_hms": 1 },
+//         "y0": { "min": 0, "max": Math.min(hand[0], n), },
+//         "y1": { "min": 0, "max": Math.min(hand[1], n), },
+//         "y2": { "min": 0, "max": Math.min(hand[2], n), },
+//         "y3": { "min": 0, "max": Math.min(hand[3], n), },
+//         "y4": { "min": 0, "max": Math.min(hand[4], n), },
+//         "y5": { "min": 0, "max": Math.min(hand[5], n), }
+//     },
+//     "variables": {
+//         "x0": { "CA_hms": 1, "C2_hms": 1 },
+//         "x1": { "C2_hms": 1, "C3_hms": 1 },
+//         "x2": { "C3_hms": 1, "CA_hms": 1 },
+//         "x3": { "DA_hms": 1, "D2_hms": 1 },
+//         "x4": { "D2_hms": 1, "D3_hms": 1 },
+//         "x5": { "D3_hms": 1, "DA_hms": 1 },
+//         "x6": { "CA_hms": 1, "DA_hms": 1 },
+//         "x7": { "C2_hms": 1, "D2_hms": 1 },
+//         "x8": { "C3_hms": 1, "D3_hms": 1 },
 
-        "y0": { "CA_hms": -1, "points": 10 },
-        "y1": { "C2_hms": -1, "points": 2 },
-        "y2": { "C3_hms": -1, "points": 3 },
-        "y3": { "DA_hms": -1, "points": 10 },
-        "y4": { "D2_hms": -1, "points": 2 },
-        "y5": { "D3_hms": -1, "points": 3 }
+//         "y0": { "CA_hms": -1, "points": 10 },
+//         "y1": { "C2_hms": -1, "points": 2 },
+//         "y2": { "C3_hms": -1, "points": 3 },
+//         "y3": { "DA_hms": -1, "points": 10 },
+//         "y4": { "D2_hms": -1, "points": 2 },
+//         "y5": { "D3_hms": -1, "points": 3 }
 
-    },
-    "ints": {
-        "x0": 1,
-        "x1": 1,
-        "x2": 1,
-        "x3": 1,
-        "x4": 1,
-        "x5": 1,
-        "x6": 1,
-        "x7": 1,
-        "x8": 1,
-        "y0": 1,
-        "y1": 1,
-        "y2": 1,
-        "y3": 1,
-        "y4": 1,
-        "y5": 1,
-    }
-};
+//     },
+//     "ints": {
+//         "x0": 1,
+//         "x1": 1,
+//         "x2": 1,
+//         "x3": 1,
+//         "x4": 1,
+//         "x5": 1,
+//         "x6": 1,
+//         "x7": 1,
+//         "x8": 1,
+//         "y0": 1,
+//         "y1": 1,
+//         "y2": 1,
+//         "y3": 1,
+//         "y4": 1,
+//         "y5": 1,
+//     }
+// };
 
-// eslint-disable-next-line functional/no-expression-statement
-console.log(`rummyModel: ${JSON.stringify(rummyModel, null, 2)}`);
+// // eslint-disable-next-line functional/no-expression-statement
+// console.log(`rummyModel: ${JSON.stringify(rummyModel, null, 2)}`);
 
-const resultsRummy: Solution<string> = Solve(rummyModel);
-// eslint-disable-next-line functional/no-expression-statement
-console.log(resultsRummy);
-// eslint-disable-next-line functional/no-expression-statement
-console.log(`resultsRummy: ${JSON.stringify(resultsRummy)}`);
-const model2: IModel = {
-    "optimize": "profit",
-    "opType": "max",
-    "constraints": {
-        "wood": { "max": 300 },
-        "labor": { "max": 110 },
-        "storage": { "max": 400 },
-    },
-    "variables": {
-        "table": { "wood": 30, "labor": 5, "profit": 1200, "table": 1, "storage": 30 },
-        "dresser": { "wood": 20, "labor": 10, "profit": 1600, "dresser": 1, "storage": 50 }
-    },
-    "ints": { "table": 1, "dresser": 1 }
-};
+// const resultsRummy: Solution<string> = Solve(rummyModel);
+// // eslint-disable-next-line functional/no-expression-statement
+// console.log(resultsRummy);
+// // eslint-disable-next-line functional/no-expression-statement
+// console.log(`resultsRummy: ${JSON.stringify(resultsRummy)}`);
+// const model2: IModel = {
+//     "optimize": "profit",
+//     "opType": "max",
+//     "constraints": {
+//         "wood": { "max": 300 },
+//         "labor": { "max": 110 },
+//         "storage": { "max": 400 },
+//     },
+//     "variables": {
+//         "table": { "wood": 30, "labor": 5, "profit": 1200, "table": 1, "storage": 30 },
+//         "dresser": { "wood": 20, "labor": 10, "profit": 1600, "dresser": 1, "storage": 50 }
+//     },
+//     "ints": { "table": 1, "dresser": 1 }
+// };
 
-const results2: Solution<string> = Solve(model2);
-// eslint-disable-next-line functional/no-expression-statement
-console.log(results2);
+// const results2: Solution<string> = Solve(model2);
+// // eslint-disable-next-line functional/no-expression-statement
+// console.log(results2);

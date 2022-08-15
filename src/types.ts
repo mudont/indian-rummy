@@ -11,7 +11,7 @@ export enum Suit {
 
 export enum Rank {
     Ace = "A",
-    One = "1", // for Joker
+    Joker = "1", // for Joker
     Two = "2",
     Three = "3",
     Four = "4",
@@ -48,13 +48,17 @@ export interface Card {
     readonly suit: Suit;
     readonly rank: Rank;
 }
+export interface Joker extends Card {
+    readonly suit: Suit.Joker;
+    readonly rank: Rank.Joker;
+}
 
 export type UserId = string;
 
 export type Hand = ReadonlyArray<Card>;
 
 export type NonJokerSuit = Omit<Suit, Suit.Joker>;
-export type NonJokerRank = Omit<Rank, Rank.One>;
+export type NonJokerRank = Omit<Rank, Rank.Joker>;
 // Set is the generic name that can mean a sequuence or triplet
 // In the game Rummikub, a "group" is a triplet, and a "run" is a sequence
 // sequence aka run
@@ -77,8 +81,10 @@ export interface ITriplet {
 
 export interface IMeldedHand {
     readonly life?: ILife;
-    readonly triplets?: readonly ITriplet[];
-    readonly sequences?: readonly ISequence[];
+    readonly triplets: readonly ITriplet[];
+    readonly sequences: readonly ISequence[];
+    readonly looseCards: readonly Card[];
+    readonly points: number;
 }
 
 export type Pile = readonly Card[];
