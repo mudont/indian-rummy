@@ -85,6 +85,7 @@ export interface IMeldedHand {
     readonly sequences: readonly ISequence[];
     readonly looseCards: readonly Card[];
     readonly points: number;
+    readonly wcj: Card; // wild card joker
 }
 
 export type Pile = readonly Card[];

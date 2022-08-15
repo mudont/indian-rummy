@@ -1,5 +1,6 @@
 # rummy-core
-:construction:  DO NOT USE YET. It is completely broken
+:construction:  DO NOT USE YET.
+
 
 A very early stage library to model the card game of Indian Rummy.
 

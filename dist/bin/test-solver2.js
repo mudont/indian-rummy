@@ -1,9 +1,15 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const js_milp_solver_1 = require("@mudont/js-milp-solver");
-//import type { IModel, Solution } from "javascript-lp-solver"
-//declare module 'javascript-lp-solver';
-// import { IModel, Solution, Solve } from "../src/solver";
+/*
+You run a small custom furniture shop and make custom tables and dressers.
+
+Each week you're limited to 300 square feet of wood, 110 hours of labor, and 400 square feet of storage.
+
+A table uses 30sf of wood, 5 hours of labor, requires 30sf of storage and has a gross profit of $1,200. A dresser uses 20sf of wood, 10 hours of work to put together, requires 50 square feet to store and has a gross profit of $1,600.
+
+How much of each do you produce to maximize profit, given that partial furniture aren't allowed in this dumb world problem?
+*/
 const model = {
     "optimize": "profit",
     "opType": "max",

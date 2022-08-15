@@ -1,4 +1,3 @@
-import assert from "assert";
 import * as R from "ramda";
 import {
     Card,
@@ -8,17 +7,13 @@ import {
     GameState,
     Hand,
     IGame,
-    IGameStore,
     ILife,
-    IMeldedHand,
     IMove,
     IMoveMeld,
     IPlayer,
     ISequence,
     ITriplet,
     MoveType,
-    NonJokerRank,
-    NonJokerSuit,
     PlayerStatus,
     Rank,
     Suit,
@@ -28,33 +23,24 @@ import Dbg from "debug";
 import {
     isJoker,
     getRankOrdinal,
-    pointsOfCard,
     mergeDecks,
     shuffleDeck,
-    mkCard,
     mkDeck,
     RankOrd,
 } from "./card";
-import { hasDuplicates, allElemsSame, hasDistinctElems, sum, setDiff } from "./util";
+import { hasDuplicates, allElemsSame, setDiff } from "./util";
 import * as E from "fp-ts/lib/Either";
 import { flow, pipe } from "fp-ts/lib/function";
-import * as T from "fp-ts/lib/Task";
-import * as TE from "fp-ts/lib/TaskEither";
 import * as N from "fp-ts/number"
-import { traceWithValue, trace } from "fp-ts-std/Debug";
-import { Do } from "fp-ts-contrib/lib/Do";
-import { append, appendW, dropLeft, reduce, sort, map, mapWithIndex, filter } from "fp-ts/lib/ReadonlyArray";
-import { fromCompare } from "fp-ts/lib/Ord";
-import * as IO from "fp-ts/lib/IO";
+import { append, dropLeft, sort, map, mapWithIndex, filter } from "fp-ts/lib/ReadonlyArray";
 import * as IOE from "fp-ts/lib/IOEither";
 import { guard } from 'fp-ts-std/Function'
 import * as L from "monocle-ts/Lens"
-import { indexArray } from "monocle-ts/lib/Index/Array"
 import * as RA from "fp-ts/lib/ReadonlyArray";
 import { indexReadonlyArray } from 'monocle-ts/lib/Index/ReadonlyArray'
 
-import { Lens, Prism, fromTraversable } from 'monocle-ts'
-import { computePoints, enumerateMeldedHand, meldedHandMatchesHand } from "./meld";
+import { Lens } from 'monocle-ts'
+import { computePointsGamePlayer, enumerateMeldedHand, meldedHandMatchesHand, mkNominalMeldedHand } from "./meld";
 
 const debug = Dbg("app:cards");
 
@@ -97,7 +83,8 @@ export function mkGame(
             ({ usedDeck, hands, openCard, joker }) => {
                 const players = R.zipWith(
                     (player: IPlayer, hand: Hand) => ({ ...player, hand }),
-                    R.map(newPlayer, playerIds),
+                    RA.mapWithIndex<string, IPlayer>((i, pid) => newPlayer(joker, pid, hands[i])
+                    )(playerIds),
                     hands
                 );
                 const game: CreateGameInput = {
@@ -286,14 +273,14 @@ export function mkTriplet(
  * @param user
  * @returns
  */
-export function newPlayer(user: UserId): IPlayer {
+export function newPlayer(wcj: Card, user: UserId, hand: readonly Card[]): IPlayer {
     return {
         user,
         status: PlayerStatus.Active,
         points: 0,
         moved: false,
         hand: [],
-        meld: {},
+        meld: mkNominalMeldedHand(wcj, hand)
     };
 }
 /**
@@ -557,7 +544,7 @@ export function mkMove(
                                 const setPoints = pipe(
                                     L.id<IPlayer>(),
                                     L.prop('points'),
-                                    L.modify(p => computePoints(game, i)),
+                                    L.modify(p => computePointsGamePlayer(game, i)),
                                 );
                                 return pipe(p, setPoints);
                             })));

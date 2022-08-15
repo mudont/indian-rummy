@@ -8,7 +8,7 @@ export declare enum Suit {
 }
 export declare enum Rank {
     Ace = "A",
-    One = "1",
+    Joker = "1",
     Two = "2",
     Three = "3",
     Four = "4",
@@ -42,10 +42,14 @@ export interface Card {
     readonly suit: Suit;
     readonly rank: Rank;
 }
+export interface Joker extends Card {
+    readonly suit: Suit.Joker;
+    readonly rank: Rank.Joker;
+}
 export declare type UserId = string;
 export declare type Hand = ReadonlyArray<Card>;
 export declare type NonJokerSuit = Omit<Suit, Suit.Joker>;
-export declare type NonJokerRank = Omit<Rank, Rank.One>;
+export declare type NonJokerRank = Omit<Rank, Rank.Joker>;
 export interface ISequence {
     readonly suit: NonJokerSuit;
     readonly ranks: readonly NonJokerRank[];
@@ -62,8 +66,11 @@ export interface ITriplet {
 }
 export interface IMeldedHand {
     readonly life?: ILife;
-    readonly triplets?: readonly ITriplet[];
-    readonly sequences?: readonly ISequence[];
+    readonly triplets: readonly ITriplet[];
+    readonly sequences: readonly ISequence[];
+    readonly looseCards: readonly Card[];
+    readonly points: number;
+    readonly wcj: Card;
 }
 export declare type Pile = readonly Card[];
 export declare type Deck = readonly Card[];

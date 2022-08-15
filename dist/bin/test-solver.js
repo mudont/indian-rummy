@@ -1,9 +1,22 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const js_milp_solver_1 = require("@mudont/js-milp-solver");
-//import type { IModel, Solution } from "javascript-lp-solver"
-//declare module 'javascript-lp-solver';
-// import { IModel, Solution, Solve } from "../src/solver";
+/*
+PROBLEM:
+========
+On June 24, 1948, the former Soviet Union blocked all land and water routes through East Germany to Berlin. A gigantic airlift was organized using American and British planes to supply food, clothing and other supplies to more than 2 million people in West Berlin.
+
+The cargo capacity was
+- 30,000 cubic feet for an American plane and
+- 20,000 cubic feet for a British plane.
+
+To break the Soviet blockade, the Western Allies had to maximize cargo capacity, but were subject to the following restrictions:
+- No more than 44 planes could be used.
+- The larger American planes required 16 personnel per flight; double that of the requirement for the British planes. The total number of personnel available could not exceed 512.
+- The cost of an American flight was $9000 and the cost of a British flight was $5000. The total weekly costs could note exceed $300,000.
+
+Find the number of American and British planes that were used to maximize cargo capacity.
+*/
 const model = {
     "optimize": "capacity",
     "opType": "max",

@@ -14,7 +14,7 @@ var Suit;
 var Rank;
 (function (Rank) {
     Rank["Ace"] = "A";
-    Rank["One"] = "1";
+    Rank["Joker"] = "1";
     Rank["Two"] = "2";
     Rank["Three"] = "3";
     Rank["Four"] = "4";

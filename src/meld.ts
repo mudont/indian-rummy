@@ -125,7 +125,12 @@ export function mkMeldFromSetVecs(
         )
     );
     const looseCards = countsVectorToCardList(looseCardsVec);
-    const preMelded = { life, sequences, triplets, looseCards };
+    const preMelded = { life, sequences, triplets, looseCards, wcj };
+    const points = computePoints(wcj)(preMelded);
+    return { ...preMelded, points };
+}
+export const mkNominalMeldedHand = (wcj: Card, hand: readonly Card[]): IMeldedHand => {
+    const preMelded = ({ life: undefined, sequences: [], triplets: [], looseCards: hand, wcj })
     const points = computePoints(wcj)(preMelded);
     return { ...preMelded, points };
 }
@@ -175,6 +180,7 @@ export const meldToJSON = (meld: IMeldedHand): string => {
  * @returns
  */
 export function mkWinningHand(
+    wcj: Card,
     sequences: readonly ISequence[],
     triplets: readonly ITriplet[]
 ): E.Either<Error, IMeldedHand> {
@@ -206,7 +212,8 @@ export function mkWinningHand(
             triplets,
             sequences: sequences.filter((s) => s.numJokers > 0),
             looseCards: [],
-            points: 0
+            points: 0,
+            wcj
         })),
     )
 }

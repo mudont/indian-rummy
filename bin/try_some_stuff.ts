@@ -42,8 +42,8 @@ const ordCard: Ord<Card> = {
             a.suit < b.suit ? -1 : 1
 }
 
-const d1 = mkDeck();
-const d2 = mkDeck();
+const d1 = mkDeck(1);
+const d2 = mkDeck(1);
 const ds = A.sort(ordCard)(mergeDecks([d1, d2]));
 //debug(`${JSON.stringify(ds)}`);
 assert(ds.length === 108);
@@ -52,7 +52,7 @@ assert(ds.length === 108);
 const dealRes = dealFromDeck(ds, 6, 13);
 const sa = mkCard(Suit.Clubs, Rank.Ace);
 const dflt: readonly [Deck, readonly (readonly Card[])[], Card, Card] =
-    [mkDeck(), [[]], sa, sa];
+    [mkDeck(1), [[]], sa, sa];
 
 const deal = E.getOrElse(() => dflt)(dealRes());
 // debug(`Result: ${JSON.stringify(deal)}`);

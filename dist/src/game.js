@@ -26,7 +26,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getRankSequences = exports.removeDups = exports.sequenceGaps = exports.checkIfWinningHand = exports.mkMove = exports.playerFinished = exports.dealFromDeck = exports.newPlayer = exports.meldedHandMatchesHand = exports.computePoints = exports.enumerateMeldedHand = exports.mkWinningHand = exports.mkTriplet = exports.mkLife = exports.mkSequence = exports.getRestrictedView = exports.mkGame = exports.cardsInSequence = void 0;
+exports.getRankSequences = exports.removeDups = exports.sequenceGaps = exports.mkMove = exports.playerFinished = exports.dealFromDeck = exports.newPlayer = exports.mkTriplet = exports.mkLife = exports.mkSequence = exports.getRestrictedView = exports.mkGame = void 0;
 const R = __importStar(require("ramda"));
 const types_1 = require("./types");
 const debug_1 = __importDefault(require("debug"));
@@ -42,30 +42,13 @@ const L = __importStar(require("monocle-ts/Lens"));
 const RA = __importStar(require("fp-ts/lib/ReadonlyArray"));
 const ReadonlyArray_2 = require("monocle-ts/lib/Index/ReadonlyArray");
 const monocle_ts_1 = require("monocle-ts");
+const meld_1 = require("./meld");
 const debug = (0, debug_1.default)("app:cards");
 const MIDDLE_DROP_POINTS = 50;
 const INITIAL_DROP_POINTS = 25;
-const FULL_COUNT_POINTS = 80;
 /************************************************************
  * Core Game functions
  ************************************************************/
-/**
- * Get list of cards in a sequence
- * @param {ISequence} seq
- * @returns Card[]
- */
-function cardsInSequence(seq) {
-    return R.map((r) => (0, card_1.mkCard)(seq.suit, r))(seq.ranks);
-}
-exports.cardsInSequence = cardsInSequence;
-/**
- * get cards from a ITriplet
- * @param trip
- * @returns
- */
-function cardsInTriplet(trip) {
-    return R.map((s) => (0, card_1.mkCard)(s, trip.rank))(trip.suits);
-}
 /**
  * Make a new Rummy Game
  * @param playerIds
@@ -76,11 +59,11 @@ function mkGame(playerIds) {
     const numPlayers = playerIds.length;
     const minCards = numPlayers * 13 + 10;
     const nDecks = Math.ceil(minCards / 54);
-    const decks = Array.from({ length: nDecks }, card_1.mkDeck);
+    const decks = Array.from({ length: nDecks }, () => (0, card_1.mkDeck)(2));
     const mergedDeck = (0, card_1.mergeDecks)(decks);
     //const [usedDeck, hands, openCard, joker] = ;
     return (0, function_1.pipe)(IOE.Do, IOE.bind("dealRes", () => (0, exports.dealFromDeck)(mergedDeck, numPlayers, 13)), IOE.bind('usedDeck', ({ dealRes }) => IOE.right(dealRes[0])), IOE.bind('hands', ({ dealRes }) => IOE.right(dealRes[1])), IOE.bind('openCard', ({ dealRes }) => IOE.right(dealRes[2])), IOE.bind('joker', ({ dealRes }) => IOE.right(dealRes[3])), IOE.chain(({ usedDeck, hands, openCard, joker }) => {
-        const players = R.zipWith((player, hand) => (Object.assign(Object.assign({}, player), { hand })), R.map(newPlayer, playerIds), hands);
+        const players = R.zipWith((player, hand) => (Object.assign(Object.assign({}, player), { hand })), RA.mapWithIndex((i, pid) => newPlayer(joker, pid, hands[i]))(playerIds), hands);
         const game = {
             deck: usedDeck,
             players,
@@ -160,80 +143,18 @@ function mkTriplet(wcJoker, cards) {
 }
 exports.mkTriplet = mkTriplet;
 /**
- * Make a Winning Hand from given sequences and triplets
- * @param sequences
- * @param triplets
- * @returns
- */
-function mkWinningHand(sequences, triplets) {
-    const cardsInSeq = (set) => set.ranks.length + set.numJokers;
-    const cardsInTrip = (set) => set.suits.length + set.numJokers;
-    const cardsInSet = (set) => 'ranks' in set ? cardsInSeq(set) : cardsInTrip(set);
-    const nCards = (0, function_1.pipe)(sequences, (0, ReadonlyArray_1.map)(cardsInSet), (0, ReadonlyArray_1.reduce)(0, (b, a) => b + a)) + (0, function_1.pipe)(triplets, (0, ReadonlyArray_1.map)(cardsInSet), (0, ReadonlyArray_1.reduce)(0, (b, a) => b + a));
-    return (0, function_1.pipe)(E.Do, E.chain(E.fromPredicate(() => nCards === 13, () => new Error("Must have 13 cards"))), E.chain(E.fromPredicate(() => sequences.length >= 2, () => new Error("Must have at least 2 sequences"))), E.chain(E.fromPredicate(() => Boolean(R.find((s) => s.numJokers === 0, sequences)), () => new Error("Must have Life sequence"))), () => E.of(sequences.length + triplets.length), E.chain(() => E.of({
-        life: R.find((s) => s.numJokers === 0, sequences),
-        triplets,
-        sequences: sequences.filter((s) => s.numJokers > 0),
-    })));
-}
-exports.mkWinningHand = mkWinningHand;
-/**
- * get all cards from a IMeldedHand
- * @param meldedHand
- * @returns
- */
-function enumerateMeldedHand(meldedHand) {
-    var _a, _b, _c, _d;
-    const jokers = R.repeat((0, card_1.mkCard)(types_1.Suit.Joker, types_1.Rank.One), (0, util_1.sum)(R.map(R.prop("numJokers"), (_a = meldedHand.triplets) !== null && _a !== void 0 ? _a : [])) +
-        (0, util_1.sum)(R.map(R.prop("numJokers"), (_b = meldedHand.sequences) !== null && _b !== void 0 ? _b : [])));
-    const lifeCards = meldedHand.life ? cardsInSequence(meldedHand.life) : [];
-    const sequenceCards = R.flatten(R.map(cardsInSequence, (_c = meldedHand.sequences) !== null && _c !== void 0 ? _c : []));
-    const tripleCards = R.flatten(R.map(cardsInTriplet, (_d = meldedHand.triplets) !== null && _d !== void 0 ? _d : []));
-    return (meldedHand.life ?
-        sequenceCards.length > 0 ?
-            jokers.concat(lifeCards, sequenceCards, tripleCards)
-            // If no second sequence after Life,
-            // can't use triplets to save points
-            : jokers.concat(lifeCards)
-        // If no life only Jokers can be used to save points
-        : jokers);
-}
-exports.enumerateMeldedHand = enumerateMeldedHand;
-/**
- * get total points for hand
- * @param game
- * @param playerIdx
- * @returns
- */
-function computePoints(game, playerIdx) {
-    const cardsToCount = (0, util_1.setDiff)(new Set(game.players[playerIdx].hand), new Set(enumerateMeldedHand(game.players[playerIdx].meld)));
-    return (game.players[playerIdx].status === types_1.PlayerStatus.Won) ? 0
-        : Math.min(FULL_COUNT_POINTS, (0, util_1.sum)(R.map(card_1.pointsOfCard)(Array.from(cardsToCount))));
-}
-exports.computePoints = computePoints;
-/**
- * Is winning hand made from these cards?
- * @param meldedHand
- * @param hand
- * @returns
- */
-function meldedHandMatchesHand(meldedHand, hand) {
-    return new Set(hand) === new Set(enumerateMeldedHand(meldedHand));
-}
-exports.meldedHandMatchesHand = meldedHandMatchesHand;
-/**
  * Make a Player
  * @param user
  * @returns
  */
-function newPlayer(user) {
+function newPlayer(wcj, user, hand) {
     return {
         user,
         status: types_1.PlayerStatus.Active,
         points: 0,
         moved: false,
         hand: [],
-        meld: {},
+        meld: (0, meld_1.mkNominalMeldedHand)(wcj, hand)
     };
 }
 exports.newPlayer = newPlayer;
@@ -352,7 +273,7 @@ function mkMove(game, move) {
                         .composeOptional((0, ReadonlyArray_2.indexReadonlyArray)().index(playerIdx))
                         .composeLens(monocle_ts_1.Lens.fromProp()('meld'))
                         .set(mv.meldedHand);
-                    const meldUsesValidCards = (0, util_1.setDiff)(new Set(enumerateMeldedHand(mv.meldedHand)), new Set(game.players[playerIdx].hand)).size > 0;
+                    const meldUsesValidCards = (0, util_1.setDiff)(new Set((0, meld_1.enumerateMeldedHand)(mv.meldedHand)), new Set(game.players[playerIdx].hand)).size > 0;
                     return !meldUsesValidCards ?
                         IOE.left(new Error("Meld contains cards not in your Hand")) :
                         IOE.right((0, function_1.pipe)(game, setMeld));
@@ -360,7 +281,7 @@ function mkMove(game, move) {
             // Show
             [R.equals(types_1.MoveType.Show), () => {
                     const cleanShow = 'meldedHand' in move &&
-                        meldedHandMatchesHand(move.meldedHand, game.players[playerIdx].hand);
+                        (0, meld_1.meldedHandMatchesHand)(move.meldedHand, game.players[playerIdx].hand);
                     const setWinnerLosers = (0, function_1.pipe)(L.id(), L.prop('players'), L.modify((0, ReadonlyArray_1.mapWithIndex)((i, p) => {
                         const status = i === playerIdx ? types_1.PlayerStatus.Won : types_1.PlayerStatus.Lost;
                         const setStatus = (0, function_1.pipe)(L.id(), L.prop('status'), L.modify(() => status));
@@ -373,7 +294,7 @@ function mkMove(game, move) {
             // Finish
             [R.equals(types_1.MoveType.Finish), () => {
                     const setPoints = (0, function_1.pipe)(L.id(), L.prop('players'), L.modify((0, ReadonlyArray_1.mapWithIndex)((i, p) => {
-                        const setPoints = (0, function_1.pipe)(L.id(), L.prop('points'), L.modify(p => computePoints(game, i)));
+                        const setPoints = (0, function_1.pipe)(L.id(), L.prop('points'), L.modify(p => (0, meld_1.computePointsGamePlayer)(game, i)));
                         return (0, function_1.pipe)(p, setPoints);
                     })));
                     return IOE.right(setPoints(game));
@@ -384,162 +305,6 @@ function mkMove(game, move) {
     }), IOE.map(appendMove), IOE.map(setMoved));
 }
 exports.mkMove = mkMove;
-/**
-  * Possible algorithm for checking potential winning hand:
-  *
-  * Look for possible pure sequences of cards in the hand. Sorting by suit and and rank should help
-  *
-  * For each Suit,
-  *
-  * The 12 possible pure 3-sequences are:
-  * A23, 234, 345, 456, 567, 678, 789, 89J, 9TJ, TJQ, JQK, QKA
-  *
-  * The 11 pure 4-sequences are:
-  * A234, 2345, 3456, 4567, 5678, 6789, 789T, 89TJ, 9TJQ, TJQK, JQKA
-  *
-  * The 10 pure 5-sequences are:
-  * *Filled by Copilot. cool!*
-  * A2345, 23456, 34567, 45678, 56789, 6789T, 789TJ, 89TJQ, 9TJQK, TJQKA
-  *===============================================================================================
-  * The 13 + 12 = 25 possible 3-sequences with 1 joker are:
-  * 13 pairs
-  * 12 pure 3-aeq with middle card missing
-  *
-  * The 13 possible 3-sequences with 2 jokers are:
-  * 13 singles
-  *--------------------------------------------------------------------------------------------
-  * The (12 + 11*2)= 34 4-sequences with 1 joker are:
-  * 12 pure 3-sequences
-  * 11 pure 4-seq with any one of 2 middle cards missing
-  *
-  *
-  * The (25+11)=36 4-sequences with 2 joker are:
-  * 25 3-sequences with 1 joker
-  * 11 pure 4-seq with two of 2 middle cards missing
-  *
-  * The 13 4-sequences with 3 joker are:
-  * A,   2,   3,   4,   5,   6,   7,   8,   9,   T,   J,   Q,   K
-  *--------------------------------------------------------------------------------------------
-  * The (11+ 3*10)= 41 5-sequences with 1 joker are:
-  * 11 pure 4-seq
-  * 10 pure 5-seq with any one middle card out of 3 missing . 3 ways to do this
-  *
-  *
-  * The (34 + 10*30)=64 5-sequences with 2 joker are:
-  * 34 4-seq with 1 joker
-  * 10 pure 5-seq with any 2 of 3 missing (3C2 = 3)
-  *
-  * The (13 + 12 + 36+ 10)=71 5-sequences with 3 joker are:
-  * 36 4-seq with 2 joker
-  * 10 pure 5-seq with any 3 of 3 missing (1 way)
-  *
-  * The 13 5-sequences with 4 joker are:
-  * 13 singles
-  *
-  *--------------------------------------------------------------------------------------------
-  * Above repeated for each suit
-  * 1372 sequences total
-  * =============================================================================================
-  * 4 pure 3-triplets
-  * 1 pure quadruplet
-  * 4C2=6 triplets with 1 joker
-  * 4C1=4 triplets with 2 joker
-  * 4C3=4 quadruplets with 1 joker
-  * 4C2=6 quadruplets with 2 joker
-  * 4C1=4 quadruplets with 3 joker
-  * 13 * (4 + 1 + 6 + 4 +4+6+4)= 377 triplets total
-  * 1372 + 377 = 1749 sets total
-  * =============================================================================================
-  * NOTE: sequences of 6 or more cards can be ignored,
-  * since the 3 extra cards can always be made into their own
-  * sequence. THus there is no risk of orphaning cards that could have been
-  * tacked on to the end ofanother sequence
-  *
-  * We can check for each of the above 33 x 4 (suits) = 132 sequences in the hand.
-  * If none found, return with error "No pure sequence (life) found"
-  * Else continue.
-  *
-  * For each pure 3/4/5-sequence found,
-  * check  if at least one other sequence with or without joker
-  * can be made from the remaining cards.
-  * If not found, return with error "No second sequence found"
-  * Else continue searching remaining cards
-  * for each potential life and 2nd-sequence discovered
-  *
-  * Look for 3/4/5-sequences with or without joker or
-  * triplets/quadruplets with or without joker
-  *
-  * High level algorithm:
-  * For each posible pure 3/4/5-sequence,
-  *   For each other 3/4/5-sequence with or without joker
-  *      For each other 3/4/5-sequence or triplet/quadruplet with or without joker
-  *         if less than 3 cards left, fail
-  *        else if remaining cards make a valid sequence wowj, or triplet/quadruplet wowj
-  *             return success
-  *
-  * Helper functions:
-  * - Partition hand by suit (for sequence checking).  sort within suit by rank
-  *   Jokers should a "suit" of their own.
-  * - Partition hand by rank (for triplets)
-  * - check for sequence
-  *   diff
-  *   if sum of diffs is <= numJokers, return true
-  * - check for triplet within rank
-  *   if numDistinctSuits + numJokers is >= 3, return true
-  *
-  * More detailed algorithm:
-  * const lifePlusRests: [[life, rest]] = getLifes(hand);
-  * error if no life found
-  * const lifeSeq2Rests: [[left, seq2, rest]] = map(getSequences(rest), lifePlusRests)
-  * error if no seq2 found
-  * const lifeSeq2Set3Rests: [[left, seq2, set3, rest]] = \
-  *       map(geSequences(rest), lifeSeq2Rests) +
-  *       map(getTriplets(rest), lifeSeq2Rests)
-  * error if no set3 found
-  * If rest is empty, return success
-  * if validSequence(rest), return success
-  * If validTriplet(rest), return success
-  * else return error
-  *
-  *
-  * error if no set4 found
-  * success!
-  *
-  * getLifes
-  *   filter out jokerts and calle getSequences
-  *
-  * getSequences(hand, wantPure?)
-  *   const [cRanks, dRanks, hRanks, sRanks, jokers] = partitionBySuit(hand);
-  *   usableJokers = wantPure ? [] : jokers;
-  *   allRankSeqs =
-  *     getRankSequences(cRanks, usableJokers) +
-  *     getRankSequences(dRanks, usableJokers) +
-  *     getRankSequences(hRanks, usableJokers) +
-  *     getRankSequences(sRanks, usableJokers)
-  *   return map(toSequence, allRankSeqs)
-  *
-  * getTriplets(hand)
-  *  const partition = partitionByRank(hand);
-  *
-  * getRankSequences(ranks, jokers)
-  *   ordinals = map(rankToOrdinal, ranks)
-  *
-  */
-/**
- * Check if this is a winning hand.
- * TODO: Implement. Some pointers in links below.
- * https://stackoverflow.com/questions/51225335/determine-if-an-indian-rummy-hand-is-a-winning-hand-java
- * http://pds2.egloos.com/pds/200611/17/89/solving%20rummikub%20problems%20by%20integer%20linear%20programming.pdf
- * Rules:
- * At least
- * @param wcJoker: Card
- * @param hand: Hand - The hand to check
- * @returns melded hand if it is a winning hand, error otherwise
- */
-function checkIfWinningHand(wcJoker, hand) {
-    return E.left(new Error("Not Implemented Yet"));
-}
-exports.checkIfWinningHand = checkIfWinningHand;
 /**
  * Find size of gaps that prevent foming a sequence from a sorted array of numbers.
  * Array of consecutive numbers will produce all zeros.

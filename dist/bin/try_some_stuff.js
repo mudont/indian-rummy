@@ -46,15 +46,15 @@ const ordCard = {
         (a.rank === b.rank ? 0 : a.rank < b.rank ? -1 : 1) :
         a.suit < b.suit ? -1 : 1
 };
-const d1 = (0, card_1.mkDeck)();
-const d2 = (0, card_1.mkDeck)();
+const d1 = (0, card_1.mkDeck)(1);
+const d2 = (0, card_1.mkDeck)(1);
 const ds = A.sort(ordCard)((0, card_1.mergeDecks)([d1, d2]));
 //debug(`${JSON.stringify(ds)}`);
 (0, assert_1.default)(ds.length === 108);
 //const [remaining, hands, openCard, joker] = dealFromDeck(ds, 6, 13);
 const dealRes = (0, game_1.dealFromDeck)(ds, 6, 13);
 const sa = (0, card_1.mkCard)(types_1.Suit.Clubs, types_1.Rank.Ace);
-const dflt = [(0, card_1.mkDeck)(), [[]], sa, sa];
+const dflt = [(0, card_1.mkDeck)(1), [[]], sa, sa];
 const deal = E.getOrElse(() => dflt)(dealRes());
 // debug(`Result: ${JSON.stringify(deal)}`);
 const [remaining, hands, openCard, joker] = deal;

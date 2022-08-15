@@ -14,6 +14,32 @@ export declare const isJoker: (wcJoker: Card) => (card: Card) => boolean;
  */
 export declare const getRankOrdinal: (rank: Rank) => number;
 /**
+ * Get all suits
+ */
+export declare const getSuits: () => readonly Suit[];
+/**
+ * Get non joker suits
+ * @returns
+ */
+export declare const getNonJokerSuits: () => readonly Suit[];
+/**
+ * Get all ranks
+ */
+export declare const getRanks: () => readonly Rank[];
+/**
+ * Get all non joker ranks
+ */
+export declare const getNonJokerRanks: () => readonly Rank[];
+/**
+ * Get all cards
+ */
+export declare const getAllCards: () => readonly Card[];
+/**
+ * Make an ordered Deck with 52 standard cards + n jokers
+ * @returns Deck
+ */
+export declare const mkDeck: (nJokers: number) => Deck;
+/**
  * Get a random card
  * @returns 2 char string representing the card
  */
@@ -24,6 +50,7 @@ export declare function getRandomCard(): IO.IO<string>;
  * @returns
  */
 export declare function strToCard(cardStr: string): Card;
+export declare const cardFromStr: typeof strToCard;
 export declare function mkCard(s: Suit, r: Rank): Card;
 export declare function cardToJSON(card: Card): string;
 export declare const serializeCard: typeof cardToJSON;
@@ -34,11 +61,6 @@ export declare const deserializeCard: typeof mkCard;
  * @returns
  */
 export declare function pointsOfCard(c: Card): number;
-/**
- * Make an ordered Deck with 52 standard cards + 2 jokers
- * @returns Deck
- */
-export declare const mkDeck: () => Deck;
 export declare function getSuitCards(s: Suit): Deck;
 /**
  * Shuffle a deck of (any number of) cards
@@ -52,4 +74,11 @@ export declare const shuffleDeck: (deck: Deck) => IO.IO<Deck>;
  * @returns
  */
 export declare const mergeDecks: (decks: readonly Deck[]) => Deck;
+/**
+ * Compare two cards for equality
+ */
+export declare const cardsEqual: (a: Card, b: Card) => boolean;
+/**
+ * Get Ord instance for Card Ranks
+ */
 export declare const RankOrd: import("fp-ts/lib/Ord").Ord<Card>;

@@ -23,7 +23,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.RankOrd = exports.mergeDecks = exports.shuffleDeck = exports.getSuitCards = exports.mkDeck = exports.pointsOfCard = exports.deserializeCard = exports.serializeCard = exports.cardToJSON = exports.mkCard = exports.strToCard = exports.getRandomCard = exports.getRankOrdinal = exports.isJoker = void 0;
+exports.RankOrd = exports.cardsEqual = exports.mergeDecks = exports.shuffleDeck = exports.getSuitCards = exports.pointsOfCard = exports.deserializeCard = exports.serializeCard = exports.cardToJSON = exports.mkCard = exports.cardFromStr = exports.strToCard = exports.getRandomCard = exports.mkDeck = exports.getAllCards = exports.getNonJokerRanks = exports.getRanks = exports.getNonJokerSuits = exports.getSuits = exports.getRankOrdinal = exports.isJoker = void 0;
 const function_1 = require("fp-ts/lib/function");
 const Ord_1 = require("fp-ts/lib/Ord");
 const R = __importStar(require("ramda"));
@@ -50,6 +50,42 @@ const getRankOrdinal = (rank) => {
 };
 exports.getRankOrdinal = getRankOrdinal;
 /**
+ * Get all suits
+ */
+const getSuits = () => Object.values(types_1.Suit);
+exports.getSuits = getSuits;
+/**
+ * Get non joker suits
+ * @returns
+ */
+const getNonJokerSuits = () => (0, exports.getSuits)().filter(s => s !== types_1.Suit.Joker);
+exports.getNonJokerSuits = getNonJokerSuits;
+/**
+ * Get all ranks
+ */
+const getRanks = () => Object.values(types_1.Rank);
+exports.getRanks = getRanks;
+/**
+ * Get all non joker ranks
+ */
+const getNonJokerRanks = () => (0, exports.getRanks)().filter(r => r !== types_1.Rank.Joker);
+exports.getNonJokerRanks = getNonJokerRanks;
+/**
+ * Get all cards
+ */
+const getAllCards = () => {
+    const suits = (0, exports.getNonJokerSuits)();
+    const ranks = (0, exports.getNonJokerRanks)();
+    return R.append(mkCard(types_1.Suit.Joker, types_1.Rank.Joker))(R.flatten(suits.map(s => ranks.map(r => ({ suit: s, rank: r })))));
+};
+exports.getAllCards = getAllCards;
+/**
+ * Make an ordered Deck with 52 standard cards + n jokers
+ * @returns Deck
+ */
+const mkDeck = (nJokers) => (0, exports.getAllCards)().concat(R.repeat(mkCard(types_1.Suit.Joker, types_1.Rank.Joker), nJokers - 1));
+exports.mkDeck = mkDeck;
+/**
  * Get a random card
  * @returns 2 char string representing the card
  */
@@ -71,6 +107,7 @@ function strToCard(cardStr) {
     return { suit: cardStr[0], rank: cardStr[1] };
 }
 exports.strToCard = strToCard;
+exports.cardFromStr = strToCard;
 function mkCard(s, r) { return strToCard(s + r); }
 exports.mkCard = mkCard;
 function cardToJSON(card) {
@@ -88,21 +125,15 @@ function pointsOfCard(c) {
     return [types_1.Rank.Ace, types_1.Rank.King, types_1.Rank.Queen, types_1.Rank.Jack].includes(c.rank) ? 10 : (0, exports.getRankOrdinal)(c.rank);
 }
 exports.pointsOfCard = pointsOfCard;
-/**
- * Make an ordered Deck with 52 standard cards + 2 jokers
- * @returns Deck
- */
-const mkDeck = () => R.flatten(R.map(getSuitCards, Object.values(types_1.Suit)));
-exports.mkDeck = mkDeck;
 function getSuitCards(s) {
     return s === types_1.Suit.Joker ?
         // Two Jokers
         [
-            mkCard(types_1.Suit.Joker, types_1.Rank.One),
-            mkCard(types_1.Suit.Joker, types_1.Rank.One),
+            mkCard(types_1.Suit.Joker, types_1.Rank.Joker),
+            mkCard(types_1.Suit.Joker, types_1.Rank.Joker),
         ]
         :
-            R.map(r => mkCard(s, r), R.filter(r => r !== types_1.Rank.One)(Object.values(types_1.Rank)));
+            R.map(r => mkCard(s, r), R.filter(r => r !== types_1.Rank.Joker)(Object.values(types_1.Rank)));
 }
 exports.getSuitCards = getSuitCards;
 /**
@@ -128,4 +159,12 @@ const mergeDecks = (decks) => {
     return d.concat(...decks);
 };
 exports.mergeDecks = mergeDecks;
+/**
+ * Compare two cards for equality
+ */
+const cardsEqual = (a, b) => a.suit === b.suit && a.rank === b.rank;
+exports.cardsEqual = cardsEqual;
+/**
+ * Get Ord instance for Card Ranks
+ */
 exports.RankOrd = (0, Ord_1.fromCompare)((a, b) => N.Ord.compare((0, exports.getRankOrdinal)(a.rank), (0, exports.getRankOrdinal)(b.rank)));
