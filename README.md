@@ -1,8 +1,10 @@
 # rummy-core
-:construction:  DO NOT USE YET.
+:construction:
 
+A very early stage library to model the card game of [Indian Rummy](https://en.wikipedia.org/wiki/Indian_Rummy).
 
-A very early stage library to model the card game of Indian Rummy.
+One function that appears to work is `solveHand()`.
+Given a hand of 13 cards and a wildcard joker, it returns all possible melds sorted in order of least points first. See `bin/test-solve.ts` for how to call it.
 
 
 

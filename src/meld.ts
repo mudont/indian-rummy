@@ -23,7 +23,7 @@ import {
 } from "./card";
 import { sum, setDiff } from "./util";
 import * as E from "fp-ts/lib/Either";
-import * as S from "fp-ts/lib/String";
+import * as S from "fp-ts/lib/string";
 import * as RA from "fp-ts/lib/ReadonlyArray";
 import { pipe } from "fp-ts/lib/function";
 import { reduce, map } from "fp-ts/lib/ReadonlyArray";
@@ -141,7 +141,7 @@ export const mkNominalMeldedHand = (wcj: Card, hand: readonly Card[]): IMeldedHa
  */
 export const ilifeToJSON = (seq: ILife) => {
     const rs = RA.foldMap(S.Monoid)(r => r as string)(seq.ranks);
-    return `*Life: ${seq.suit as string}->${rs}*`;
+    return `<Life: ${seq.suit as string}->${rs}>`;
 }
 
 /**
@@ -152,7 +152,7 @@ export const ilifeToJSON = (seq: ILife) => {
 export const iseqToJSON = (seq: ISequence) => {
     const rs = RA.foldMap(S.Monoid)(r => r as string)(seq.ranks);
     const wcs = RA.replicate(seq.numJokers, "*").join("");
-    return `[Seq: ${seq.suit as string}->${rs}${wcs}]`;
+    return `<Seq: ${seq.suit as string}->${rs}${wcs}>`;
 }
 
 /**
@@ -163,15 +163,19 @@ export const iseqToJSON = (seq: ISequence) => {
 export const itripletToJSON = (seq: ITriplet) => {
     const ss = RA.foldMap(S.Monoid)(s => s as string)(seq.suits);
     const wcs = RA.replicate(seq.numJokers, "*").join("");
-    return ` (Triplet: ${ss}${wcs}-:${seq.rank as string})`;
+    return `[Triplet: ${ss}${wcs}-:${seq.rank as string}]`;
 }
 
 export const meldToJSON = (meld: IMeldedHand): string => {
     const life = meld.life ? ilifeToJSON(meld.life) : "";
     const sequences = RA.foldMap(S.Monoid)(iseqToJSON)(meld.sequences);
     const triplets = RA.foldMap(S.Monoid)(itripletToJSON)(meld.triplets);
-    const looseCards = RA.foldMap(S.Monoid)(cardToJSON)(meld.looseCards);
-    return `${life} / ${sequences} / ${triplets} / -${looseCards}- ==> ${meld.points} points`;
+    const looseCards = pipe(
+        meld.looseCards,
+        RA.map(cardToJSON)
+    ).join(", ");
+    // RA.foldMap(S.Monoid)(cardToJSON)(meld.looseCards);
+    return `${life} / ${sequences} / ${triplets} / (loose: ${looseCards}) ==> ${meld.points} points`;
 }
 /**
  * Make a Winning Hand from given sequences and triplets

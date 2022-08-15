@@ -106,7 +106,7 @@ export const deserializeCard = mkCard;
  * @returns
  */
 export function pointsOfCard(c: Card): number {
-    return [Rank.Ace, Rank.King, Rank.Queen, Rank.Jack].includes(c.rank) ? 10 : getRankOrdinal(c.rank)
+    return (c.suit === Suit.Joker) ? 0 : [Rank.Ace, Rank.King, Rank.Queen, Rank.Jack].includes(c.rank) ? 10 : getRankOrdinal(c.rank)
 }
 
 

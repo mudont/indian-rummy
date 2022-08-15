@@ -1,24 +1,25 @@
+/**
+ * https://stackoverflow.com/questions/51225335/determine-if-an-indian-rummy-hand-is-a-winning-hand-java
+ * SOlution is partly inspired by
+ * http://pds2.egloos.com/pds/200611/17/89/solving%20rummikub%20problems%20by%20integer%20linear%20programming.pdf
+ * We use their idea of enumerating all possible sets, but  we don't use an MILP solver.
+ * That would likely be slower our more direct approach.
+ * Typescript and fp-ts may not be the best choice for high performance though.
+ */
 import * as NEA from 'fp-ts/lib/ReadonlyNonEmptyArray'
 import * as RA from 'fp-ts/lib/ReadonlyArray'
 import { flow, pipe } from 'fp-ts/lib/function'
-import { cardFromStr, cardsEqual, cardToJSON, getAllCards, getNonJokerRanks, getNonJokerSuits, getRanks, getSuits, isJoker, mkCard, strToCard } from './card';
+import { cardFromStr, cardsEqual, cardToJSON, getAllCards, getNonJokerRanks, getNonJokerSuits, mkCard, strToCard } from './card';
 import { Card, Hand, IMeldedHand, Rank, Suit } from './types';
-import { identity } from 'ramda';
 import * as E from "fp-ts/lib/Either"
-import * as S from "fp-ts/lib/string"
-import * as M from "fp-ts/lib/Monoid";
 import * as C from "./combinatorics"
 import * as R from "ramda";
 import Debug from 'debug';
-import { rightState } from 'fp-ts/lib/StateReaderTaskEither';
-import * as V from 'vectorious'
-import { ilifeToJSON, iseqToJSON, meldToJSON, mkLife, mkMeldFromSetVecs, mkSequence } from './meld';
+import { meldToJSON, mkMeldFromSetVecs } from './meld';
 
-const startTime = console.time("solving");
 const debug = Debug('app:solving');
 type Seq = readonly Card[];
-
-type Triplet = readonly Card[];
+type SetVec = readonly number[];
 
 const allRanks = getNonJokerRanks();
 const wrappedRanks = RA.append(allRanks[0])(allRanks);
@@ -91,7 +92,7 @@ export const allPureSeqs = RA.flatten([
     allPureSeqs3, allPureSeqs4, allPureSeqs5
 ]);
 
-export const getNumCardsInVec = (vec: readonly number[]): number =>
+export const getNumCardsInVec = (vec: SetVec): number =>
     RA.reduce<number, number>(0, (acc, i) => acc + i)(vec)
 
 export const allPureTriplets = RA.flatten(RA.map(mkTriplets)(getNonJokerRanks()));
@@ -160,7 +161,7 @@ export const cardListToCountsVector = (cardList: readonly Card[]) => {
 const allSequences = RA.flatten([allPureSeqs, allSeqsWithJokers]);
 const allSets = RA.flatten([allPureSeqs, allPureGroups, allSeqsWithJokers, allGroupsWithJokers]);
 const allPureSeqsVec = pipe(
-    allSequences,
+    allPureSeqs,
     RA.map(cardListToCountsVector),
 )
 const allSequencesVec = pipe(
@@ -204,7 +205,7 @@ export const setsArrData = RA.map(cardListToCountsVector)(allSets)
  * @param setVec
  * @returns given hand with given set removed
  */
-export const handMinusSet = (handVec: readonly number[]) => (setVec: readonly number[]) =>
+export const handMinusSet = (handVec: SetVec) => (setVec: SetVec) =>
     RA.mapWithIndex<number, number>((ix, val) => handVec[ix] - val)(setVec)
 
 /**
@@ -212,39 +213,47 @@ export const handMinusSet = (handVec: readonly number[]) => (setVec: readonly nu
  * @param allSetsVector
  * @returns subset of given "all" sets that could be made from the given hand.
  */
-export const getFeasibleSets = (handVec: readonly number[]) =>
-    RA.filter((setVec: readonly number[]) => {
+const getFeasibleSets = (handVec: SetVec) =>
+    RA.filter((setVec: SetVec) => {
         const hms = handMinusSet(handVec)(setVec)
         return R.all<number>(i => i >= 0)(hms)
     })
+//export const getFeasibleSets = memoize()<ReturnType<typeof getFeasibleSets_>>(getFeasibleSets_);
 
-type LifeAndRest = readonly [readonly number[], readonly number[]];
-type SeqAndRest = readonly [readonly number[], readonly number[]];
-type SetAndRest = readonly [readonly number[], readonly number[]];
-type LifeSeqAndRest = readonly [readonly number[], readonly number[], readonly number[]];
-type LifeSeqSetAndRest = readonly [readonly number[], readonly number[], readonly number[], readonly number[]]; type FinalMeldVec = readonly [readonly number[], readonly number[], readonly number[], readonly number[], readonly number[]];
+type LifeAndRest = readonly [SetVec, SetVec];
+type SeqAndRest = readonly [SetVec, SetVec];
+type SetAndRest = readonly [SetVec, SetVec];
+type LifeSeqAndRest = readonly [SetVec, SetVec, SetVec];
+type LifeSeqSetAndRest = readonly [SetVec, SetVec, SetVec, SetVec]; type FinalMeldVec = readonly [SetVec, SetVec, SetVec, SetVec, SetVec];
+export interface SolverCtx {
+    readonly feasiblePureSeqs: readonly (SetVec)[]
+    readonly feasibleSeqs: readonly (SetVec)[]
+    readonly feasibleSets: readonly (SetVec)[]
+    readonly handVec: SetVec
+    readonly wcj: Card
+}
 
-const getLifeAndRemainingCards = (
-    handVec: readonly number[]
+const getLifeAndRemainingCards = (ctx: SolverCtx) => (
+    handVec: SetVec
 ): readonly LifeAndRest[] =>
     pipe(
-        allPureSeqsVec,
-        getFeasibleSets(handVec),
+        ctx.feasiblePureSeqs,
+        // getFeasibleSets(handVec),
         RA.map(life =>
             [life, handMinusSet(handVec)(life)]
         )
     )
 
-const getSecondSeqAndRemainingCards = (remainingHandVec: readonly number[]): readonly SeqAndRest[] => pipe(
-    allSequencesVec,
+const getSecondSeqAndRemainingCards = (ctx: SolverCtx) => (remainingHandVec: SetVec): readonly SeqAndRest[] => pipe(
+    ctx.feasibleSeqs,
     getFeasibleSets(remainingHandVec),
     RA.map(seq =>
         [seq, handMinusSet(remainingHandVec)(seq)]
     ),
 )
 
-const getSetAndRemainingCards = (remainingHandVec: readonly number[]): readonly SetAndRest[] => pipe(
-    allSetsVec,
+const getSetAndRemainingCards = (ctx: SolverCtx) => (remainingHandVec: SetVec): readonly SetAndRest[] => pipe(
+    ctx.feasibleSets,
     getFeasibleSets(remainingHandVec),
     RA.map(set =>
         [set, handMinusSet(remainingHandVec)(set)]
@@ -253,45 +262,46 @@ const getSetAndRemainingCards = (remainingHandVec: readonly number[]): readonly 
 
 //------------------------------------------------------------------------------
 // 1.
-export const getLife1Melds = (handVec: readonly number[]): readonly LifeAndRest[] => {
-    const lrc = getLifeAndRemainingCards(handVec)
+export const getLife1Melds = (ctx: SolverCtx) => (handVec: SetVec): readonly LifeAndRest[] => {
+    const tmp = getLifeAndRemainingCards(ctx);
+    const lrc = getLifeAndRemainingCards(ctx)(handVec)
     return lrc.length === 0 ? [[[], handVec]] : lrc
 }
 
 // 2.
-export const getSeq2MeldsOpt = (
-    life: readonly number[], handVec: readonly number[]
+export const getSeq2MeldsOpt = (ctx: SolverCtx) => (
+    life: SetVec, handVec: SetVec
 ): readonly LifeSeqAndRest[] =>
-    life.length === 0 ? [[life, [], handVec]] : getSeq2Melds(life, handVec)
+    life.length === 0 ? [[life, [], handVec]] : getSeq2Melds(ctx)(life, handVec)
 
-export const getSeq2Melds = (life: readonly number[], handVec: readonly number[]): readonly LifeSeqAndRest[] => {
-    const lrc = getSecondSeqAndRemainingCards(handVec)
+export const getSeq2Melds = (ctx: SolverCtx) => (life: SetVec, handVec: SetVec): readonly LifeSeqAndRest[] => {
+    const lrc = getSecondSeqAndRemainingCards(ctx)(handVec)
     return lrc.length === 0 ? [[life, [], handVec]] : RA.map<LifeAndRest, LifeSeqAndRest>(seq => [life, seq[0], seq[1]])(lrc)
 }
 
 // 3.
-export const getSet3MeldsOpt = (
-    life: readonly number[], seq1: readonly number[], handVec: readonly number[]
+export const getSet3MeldsOpt = (ctx: SolverCtx) => (
+    life: SetVec, seq1: SetVec, handVec: SetVec
 ): readonly LifeSeqSetAndRest[] =>
-    seq1.length === 0 ? [[life, seq1, [], handVec]] : getSet3Melds(life, seq1, handVec)
+    seq1.length === 0 ? [[life, seq1, [], handVec]] : getSet3Melds(ctx)(life, seq1, handVec)
 
-export const getSet3Melds = (life: readonly number[], seq1: readonly number[], handVec: readonly number[]): readonly LifeSeqSetAndRest[] => {
-    const lrc = getSetAndRemainingCards(handVec)
+export const getSet3Melds = (ctx: SolverCtx) => (life: SetVec, seq1: SetVec, handVec: SetVec): readonly LifeSeqSetAndRest[] => {
+    const lrc = getSetAndRemainingCards(ctx)(handVec)
 
     return lrc.length === 0 ? [[life, seq1, [], handVec]] : RA.map<SetAndRest, LifeSeqSetAndRest>(seq => [life, seq1, seq[0], seq[1]])(lrc)
 }
 
 // 4.
-export const getFinalMeldsOpt = (
-    life: readonly number[], seq1: readonly number[], set3: readonly number[], handVec: readonly number[]
+export const getFinalMeldsOpt = (ctx: SolverCtx) => (
+    life: SetVec, seq1: SetVec, set3: SetVec, handVec: SetVec
 ): readonly FinalMeldVec[] => {
     return set3.length === 0 || getNumCardsInVec(handVec) < 3 ?
         [[life, seq1, set3, [], handVec]] :
-        getFinalMelds(life, seq1, set3, handVec)
+        getFinalMelds(ctx)(life, seq1, set3, handVec)
 }
 
-export const getFinalMelds = (life: readonly number[], seq1: readonly number[], set3: readonly number[], handVec: readonly number[]): readonly FinalMeldVec[] => {
-    const lrc = getSetAndRemainingCards(handVec)
+export const getFinalMelds = (ctx: SolverCtx) => (life: SetVec, seq1: SetVec, set3: SetVec, handVec: SetVec): readonly FinalMeldVec[] => {
+    const lrc = getSetAndRemainingCards(ctx)(handVec)
 
     return lrc.length === 0 ? [[life, seq1, set3, [], handVec]] : RA.map<SetAndRest, FinalMeldVec>(seq => [life, seq1, set3, seq[0], seq[1]])(lrc)
 }
@@ -442,9 +452,8 @@ export const getFinalMelds = (life: readonly number[], seq1: readonly number[], 
   */
 /**
  * Check if this is a winning hand.
- * TODO: Implement. Some pointers in links below.
- * https://stackoverflow.com/questions/51225335/determine-if-an-indian-rummy-hand-is-a-winning-hand-java
- * http://pds2.egloos.com/pds/200611/17/89/solving%20rummikub%20problems%20by%20integer%20linear%20programming.pdf
+ *
+
  * Rules:
  * At least
  * @param wcJoker: Card
@@ -453,89 +462,42 @@ export const getFinalMelds = (life: readonly number[], seq1: readonly number[], 
  */
 
 export function checkIfWinningHand(wcJoker: Card, hand: Hand): E.Either<Error, IMeldedHand> {
-
-    return E.left(new Error("Not Implemented Yet"));
+    const melds = solveHand(wcJoker, hand);
+    return (melds && melds[0].points === 0) ? E.right(melds[0]) : E.left(new Error("Not a winning hand"));
 }
 
-//==========================================================================================
-// eslint-disable-next-line functional/no-expression-statement
-console.timeEnd("solving");
+/**
+ * The key function of this module.
+ * Try to find the best meld for the given hand.
+ * @param wcj
+ * @param hand
+ * @returns
+ */
+export const solveHand = (wcj: Card, hand: Hand): readonly IMeldedHand[] => {
+    // eslint-disable-next-line functional/no-expression-statement
+    console.time("solveHand");
+    const handVec = cardListToCountsVector(hand);
+    const feasiblePureSeqs = getFeasibleSets(handVec)(allPureSeqsVec);
+    const feasibleSeqs = getFeasibleSets(handVec)(allSequencesVec);
+    const feasibleSets = getFeasibleSets(handVec)(allSetsVec);
+    const ctx: SolverCtx = {
+        handVec,
+        feasiblePureSeqs,
+        feasibleSeqs,
+        feasibleSets,
+        wcj
+    }
 
-// eslint-disable-next-line functional/no-expression-statement
-console.time('setsArr')
-//const setsArr = new V.NDArray(setsArrData, { dtype: 'int8' });
-// eslint-disable-next-line functional/no-expression-statement
-console.timeEnd("setsArr");
-//const slice = setsArr.slice(0, 1).toString()
-
-const testHand = RA.map(strToCard)(
-    [
-        'CA', 'C2', 'C3',
-        'C7', 'D8', 'H7', 'SA',
-        'HT', 'HJ', 'HQ',
-        'D8', 'DT', 'DK'
-    ])
-const handVec = cardListToCountsVector(testHand)
-// eslint-disable-next-line functional/no-expression-statement
-//debug(`testHand: ${JSON.stringify(handVec)}`);
-
-const printableCardLists = pipe(
-    setsArrData,
-    getFeasibleSets(handVec),
-    RA.map(
-        flow(
-            countsVectorToCardList,
-            RA.map(cardToJSON)
-        )
+    const melds = pipe(
+        handVec,
+        getLife1Melds(ctx),
+        RA.chain((lr: LifeAndRest) => getSeq2MeldsOpt(ctx)(...lr)),
+        RA.chain((lsr: LifeSeqAndRest) => getSet3MeldsOpt(ctx)(...lsr)),
+        RA.chain((lssr: LifeSeqSetAndRest) => getFinalMeldsOpt(ctx)(...lssr)),
+        RA.map(setsVec => mkMeldFromSetVecs(wcj, ...setsVec)),
+        R.sort((meld: IMeldedHand) => meld.points),
     )
-)
-const wcj = mkCard(Suit.Diamonds, Rank.Ace);
-
-const allWinningMelds = pipe(
-    handVec,
-    getLife1Melds,
-    RA.chain((lr: LifeAndRest) => getSeq2MeldsOpt(...lr)),
-    RA.chain((lsr: LifeSeqAndRest) => getSet3MeldsOpt(...lsr)),
-    RA.chain((lssr: LifeSeqSetAndRest) => getFinalMeldsOpt(...lssr)),
-    RA.map(setsVec => mkMeldFromSetVecs(wcj, ...setsVec)),
-    // RA.filter(meld =>
-    //     pipe(
-    //         meld.looseCards,
-    //         RA.filter(c => !isJoker(wcj)(c)),
-    //     ).length === 0),
-    RA.map(meldToJSON)
-)
-// eslint-disable-next-line functional/no-expression-statement
-debug(`allMelds: ${JSON.stringify(allWinningMelds.length)}`);
-// eslint-disable-next-line functional/no-expression-statement
-debug(`allMelds: ${JSON.stringify(allWinningMelds, null, 4)}`);
-
-// const lrc = getLifeAndRemainingCards(handVec)
-// // eslint-disable-next-line functional/no-expression-statement
-// //debug(`lrc: ${JSON.stringify(lrc)}`);
-// const [life, remainingCards] = lrc[0];
-// // eslint-disable-next-line functional/no-expression-statement
-// debug(`life: ${pipe(
-//     life,
-//     countsVectorToCardList,
-//     mkLife,
-//     ilifeToJSON,
-//     JSON.stringify
-// )}`);
-// const s2rc = getSecondSeqAndRemainingCards(remainingCards)
-// const [seq2, rem2] = s2rc[0];
-// // eslint-disable-next-line functional/no-expression-statement
-// debug(`seq2: ${pipe(
-//     seq2,
-//     countsVectorToCardList,
-//     cl => mkSequence(cl[0].suit, cl, mkCard(Suit.Diamonds, Rank.Ace)),
-//     iseqToJSON,
-//     JSON.stringify
-// )}`);
-// // eslint-disable-next-line functional/no-expression-statement
-// debug(`rem2: ${pipe(
-//     rem2,
-//     countsVectorToCardList,
-//     RA.map(cardToJSON),
-//     JSON.stringify
-// )}`);
+    // eslint-disable-next-line functional/no-expression-statement
+    console.timeEnd("solveHand");
+    return melds
+}
