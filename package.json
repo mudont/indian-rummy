@@ -6,7 +6,8 @@
   "scripts": {
     "clean": "rm -rf dist",
     "build": "npm run clean && tsc && cp package.json README.md ./dist",
-    "test": "jest"
+    "test": "jest --coverage",
+    "test:watch": "jest --watch --coverage"
   },
   "keywords": [],
   "author": "Mu Dont",

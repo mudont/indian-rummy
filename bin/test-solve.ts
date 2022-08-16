@@ -23,8 +23,8 @@ const poorHand = RA.map(strToCard)(
     ])
 const winningHand = RA.map(strToCard)(
     [
-        'CA', 'C7', 'D7', 'H7', 'S7', 'C3',
-        'HT', 'J1', 'HQ',
+        'CA', 'C2', 'D7', 'H7', 'S7', 'C3',
+        'HT', 'HJ', 'HQ',
         'J1', 'J1', 'J1', 'C2',
     ])
 // Make a wildcard joker

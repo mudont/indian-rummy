@@ -1,5 +1,5 @@
 /**
- * TODO: Implement a bot who can play the game.
+ * TODO: Implement a bot who can play Inidan Rummy.
  *
  * Bots will help test the core library, as we can simulate
  * games among bots.

@@ -16,7 +16,7 @@ import * as IO from "fp-ts/lib/IO";
  * @returns a function that takes a card and determines if that card is a joker
  *          for a game with given wildcard joker
  */
-export const isJoker = (wcJoker: Card) => (card: Card): boolean => card === wcJoker || card.suit === Suit.Joker;
+export const isJoker = (wcJoker: Card) => (card: Card): boolean => cardsEqual(card, wcJoker) || card.suit === Suit.Joker;
 /**
  * Get sortable integer value for given Card Rank
  * @param rank
@@ -49,17 +49,21 @@ export const getNonJokerRanks = (): readonly Rank[] => getRanks().filter(r => r 
 /**
  * Get all cards
  */
-export const getAllCards = (): readonly Card[] => {
+export const getAllCards = (noJokers?: boolean): readonly Card[] => {
     const suits = getNonJokerSuits();
     const ranks = getNonJokerRanks();
-    return R.append(mkCard(Suit.Joker, Rank.Joker))(R.flatten(suits.map(s => ranks.map(r => ({ suit: s, rank: r })))));
+    const cards = R.flatten(suits.map(s => ranks.map(r => ({ suit: s, rank: r }))));
+    return noJokers ? cards : R.append(mkCard(Suit.Joker, Rank.Joker))(cards);
 }
 /**
  * Make an ordered Deck with 52 standard cards + n jokers
  * @returns Deck
  */
 
-export const mkDeck = (nJokers: number): Deck => getAllCards().concat(R.repeat(mkCard(Suit.Joker, Rank.Joker), nJokers - 1));
+export const mkDeck = (nJokers: number): Deck => {
+    const d = getAllCards(true)
+    return d.concat(R.repeat(mkCard(Suit.Joker, Rank.Joker), nJokers));
+}
 
 /**
  * Get a random card
@@ -73,8 +77,8 @@ export function getRandomCard(): IO.IO<string> {
 
     return pipe(
         IO.of(makeCard),
-        IO.ap(Rand.randomInt(0, suits.length)),
-        IO.ap(Rand.randomInt(0, ranks.length))
+        IO.ap(Rand.randomInt(0, suits.length - 1)),
+        IO.ap(Rand.randomInt(0, ranks.length - 1))
     )
 }
 /**

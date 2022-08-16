@@ -25,7 +25,16 @@ test("Set diff empty", () => {
 test("[1,2,3] has no dups", () => {
     expect(util.hasDuplicates([1, 2, 3])).toBe(false);
 });
+test("[1,2,3] has distinct elems", () => {
+    expect(util.hasDistinctElems([1, 2, 3])).toBe(true);
+});
+test("[1,2,2] doesn't have distinct elems", () => {
+    expect(util.hasDistinctElems([1, 2, 2])).toBe(false);
+});
 
-test("[1,2,1] has dups", () => {
-    expect(util.hasDuplicates([1, 2, 1])).toBe(true);
+test("[1,1,1] has same elem", () => {
+    expect(util.allElemsSame([1, 1, 1])).toBe(true);
+});
+test("[1,1,10] has sadifferent elems", () => {
+    expect(util.allElemsSame([1, 1, 10])).toBe(false);
 });

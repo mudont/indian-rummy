@@ -21,6 +21,10 @@ const debug = Debug('app:solving');
 type Seq = readonly Card[];
 type SetVec = readonly number[];
 
+// flatMap is a more intuitive names for chain() in the *Array instances.
+const flatMap = RA.chain;
+const flatMapWithIndex = RA.chainWithIndex;
+
 const allRanks = getNonJokerRanks();
 const wrappedRanks = RA.append(allRanks[0])(allRanks);
 /**
@@ -85,9 +89,9 @@ type RummySet = readonly Card[];
 type RummySets = readonly RummySet[];
 type RummySetss = readonly RummySets[];
 
-export const allPureSeqs3 = RA.chain((s: Suit) => mkSeqs(s, 13, 3, true))(getNonJokerSuits());
-export const allPureSeqs4 = RA.chain((s: Suit) => mkSeqs(s, 13, 4, true))(getNonJokerSuits());
-export const allPureSeqs5 = RA.chain((s: Suit) => mkSeqs(s, 13, 5, true))(getNonJokerSuits());
+export const allPureSeqs3 = flatMap((s: Suit) => mkSeqs(s, 13, 3, true))(getNonJokerSuits());
+export const allPureSeqs4 = flatMap((s: Suit) => mkSeqs(s, 13, 4, true))(getNonJokerSuits());
+export const allPureSeqs5 = flatMap((s: Suit) => mkSeqs(s, 13, 5, true))(getNonJokerSuits());
 export const allPureSeqs = RA.flatten([
     allPureSeqs3, allPureSeqs4, allPureSeqs5
 ]);
@@ -98,15 +102,15 @@ export const getNumCardsInVec = (vec: SetVec): number =>
 export const allPureTriplets = RA.flatten(RA.map(mkTriplets)(getNonJokerRanks()));
 
 const allPureGroups = RA.flatten([
-    RA.chain(mkQuadruplets)(getNonJokerRanks()),
+    flatMap(mkQuadruplets)(getNonJokerRanks()),
     allPureTriplets,
 ])
 
 const allSeqsWithJokers = pipe(
     allPureSeqs,
     // RA.takeRight(2),
-    RA.chain((pureSet: Seq) =>
-        RA.chain((nJokers: number) =>
+    flatMap((pureSet: Seq) =>
+        flatMap((nJokers: number) =>
             pipe(
                 C.combinations(pureSet, pureSet.length - nJokers),
                 Array.from,
@@ -122,8 +126,8 @@ const allSeqsWithJokers = pipe(
 const allGroupsWithJokers = pipe(
     allPureGroups,
     // RA.takeRight(2),
-    RA.chain((pureSet: Seq) =>
-        RA.chain((nJokers: number) =>
+    flatMap((pureSet: Seq) =>
+        flatMap((nJokers: number) =>
             pipe(
                 C.combinations(pureSet, pureSet.length - nJokers),
                 Array.from,
@@ -190,7 +194,7 @@ const allSetsVec = pipe(
 export const countsVectorToCardList = (counts: readonly number[]): readonly Card[] =>
     pipe(
         counts,
-        RA.chainWithIndex(
+        flatMapWithIndex(
             (i, cnt) => {
                 const cards = cnt === 0 ? [] : RA.replicate(cnt, allCards[i])
                 return cards
@@ -474,8 +478,6 @@ export function checkIfWinningHand(wcJoker: Card, hand: Hand): E.Either<Error, I
  * @returns
  */
 export const solveHand = (wcj: Card, hand: Hand): readonly IMeldedHand[] => {
-    // eslint-disable-next-line functional/no-expression-statement
-    console.time("solveHand");
     const handVec = cardListToCountsVector(hand);
     const feasiblePureSeqs = getFeasibleSets(handVec)(allPureSeqsVec);
     const feasibleSeqs = getFeasibleSets(handVec)(allSequencesVec);
@@ -491,13 +493,11 @@ export const solveHand = (wcj: Card, hand: Hand): readonly IMeldedHand[] => {
     const melds = pipe(
         handVec,
         getLife1Melds(ctx),
-        RA.chain((lr: LifeAndRest) => getSeq2MeldsOpt(ctx)(...lr)),
-        RA.chain((lsr: LifeSeqAndRest) => getSet3MeldsOpt(ctx)(...lsr)),
-        RA.chain((lssr: LifeSeqSetAndRest) => getFinalMeldsOpt(ctx)(...lssr)),
+        flatMap((lr: LifeAndRest) => getSeq2MeldsOpt(ctx)(...lr)),
+        flatMap((lsr: LifeSeqAndRest) => getSet3MeldsOpt(ctx)(...lsr)),
+        flatMap((lssr: LifeSeqSetAndRest) => getFinalMeldsOpt(ctx)(...lssr)),
         RA.map(setsVec => mkMeldFromSetVecs(wcj, ...setsVec)),
         R.sort((meld: IMeldedHand) => meld.points),
     )
-    // eslint-disable-next-line functional/no-expression-statement
-    console.timeEnd("solveHand");
     return melds
 }

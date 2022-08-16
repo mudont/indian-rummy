@@ -216,7 +216,7 @@ export function mkWinningHand(
             triplets,
             sequences: sequences.filter((s) => s.numJokers > 0),
             looseCards: [],
-            points: 0,
+            points: FULL_COUNT_POINTS,
             wcj
         })),
     )
