@@ -1,5 +1,11 @@
 import * as IOE from "fp-ts/lib/IOEither";
-//import * as IOEither from "fp-ts/lib/IOEither";
+
+/**
+ * Representation of a playing card (a Suit and a Rank) should be
+ * pretty easy to see.
+ * Perhaps the only thing to keep in mind is that
+ * jokers are represented as Suit=Joker and Rank=1
+ */
 // ♣♦♥♠  ♧♢♡♤
 export enum Suit {
     Clubs = "C",
@@ -28,19 +34,33 @@ export enum Rank {
 
 export enum PlayerStatus {
     Active,
-    OwesCard,
+    OwesCard, // State between moveTakeOpen/TakeFromDeck and the move ReturnExtraCard
     Dropped,
     Won,
     Lost,
 }
-
+// Things that a player can do to interact with the Game service
+// slightly different from Turn (see comments below)
 export enum MoveType {
+    /**
+     * Drop == Give up early and get a discount on points.
+     * Drop before first move == 25 points
+     * A "Middle" Drop after playing at least one move == 50
+     * Worst case points if you don't drop == 80
+     */
     Drop,
-    TakeOpen,
-    TakeFromDeck,
-    ReturnExtraCard,
+    TakeOpen, // Take top card from the Discarded pile, which are all laid face up
+    TakeFromDeck, // Take top card from the remaining Deck, which is face down
+    ReturnExtraCard, // This is technically part of TakeOpen and TakeFromDeck
+    Show, // means player is claiming a win.
+
+    // TODO: Check if we really need Meld.
+    // Not technically a move, but something the Game API suppoorts
+    // where a player can tell the server to store their Meld.
     Meld,
-    Show,
+    // TODO: Is this needed/does it make sense?
+    // The idea is that after a 'Show' has passed inspection by other players
+    // or the computer, someone marks the Game as Finished.
     Finish,
 }
 
@@ -59,7 +79,8 @@ export type Hand = ReadonlyArray<Card>;
 
 export type NonJokerSuit = Omit<Suit, Suit.Joker>;
 export type NonJokerRank = Omit<Rank, Rank.Joker>;
-// Set is the generic name that can mean a sequuence or triplet
+
+// Set is the generic name that can mean a sequence or triplet
 // In the game Rummikub, a "group" is a triplet, and a "run" is a sequence
 // sequence aka run
 export interface ISequence {
@@ -67,7 +88,7 @@ export interface ISequence {
     readonly ranks: readonly NonJokerRank[];
     readonly numJokers: number;
 }
-// Life aka Pure sequence/Pure Run
+// Life, aka Pure sequence/Pure Run
 export interface ILife {
     readonly suit: NonJokerSuit;
     readonly ranks: readonly NonJokerRank[];

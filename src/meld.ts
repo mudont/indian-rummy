@@ -29,10 +29,9 @@ import { pipe } from "fp-ts/lib/function";
 import { reduce, map } from "fp-ts/lib/ReadonlyArray";
 import { Refinement } from "fp-ts/lib/Refinement";
 import { countsVectorToCardList } from "./solving";
-
+import { FULL_COUNT_POINTS } from "./const";
 
 const debug = Dbg("app:meld");
-const FULL_COUNT_POINTS = 80;
 
 /**
  * Get list of cards in a sequence

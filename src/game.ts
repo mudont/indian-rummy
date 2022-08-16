@@ -41,12 +41,9 @@ import { indexReadonlyArray } from 'monocle-ts/lib/Index/ReadonlyArray'
 
 import { Lens } from 'monocle-ts'
 import { computePointsGamePlayer, enumerateMeldedHand, meldedHandMatchesHand, mkNominalMeldedHand } from "./meld";
-
+import { MIDDLE_DROP_POINTS, INITIAL_DROP_POINTS } from "./const";
 const debug = Dbg("app:cards");
 
-
-const MIDDLE_DROP_POINTS = 50;
-const INITIAL_DROP_POINTS = 25;
 
 /************************************************************
  * Core Game functions
