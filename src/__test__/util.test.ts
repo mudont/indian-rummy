@@ -1,6 +1,6 @@
 /* eslint-disable functional/no-return-void */
 /* eslint-disable functional/no-expression-statement */
-import * as util from "./util";
+import * as util from "../util";
 
 test("sum([1,2] equals 3", () => {
     expect(util.sum([1, 2])).toBe(3);

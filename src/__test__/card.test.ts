@@ -1,7 +1,7 @@
 /* eslint-disable functional/no-return-void */
 /* eslint-disable functional/no-expression-statement */
-import * as C from "./card";
-import { Rank, Suit } from "./types";
+import * as C from "../card";
+import { Rank, Suit } from "../types";
 
 test("Random card", () => {
     const c = C.getRandomCard()()

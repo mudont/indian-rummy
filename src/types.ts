@@ -100,6 +100,8 @@ export interface ITriplet {
     readonly numJokers: number;
 }
 
+// TODO: Deprecate in favor of Meld below
+// which makes invalid states unrepresentable
 export interface IMeldedHand {
     readonly life?: ILife;
     readonly triplets: readonly ITriplet[];
@@ -108,6 +110,39 @@ export interface IMeldedHand {
     readonly points: number;
     readonly wcj: Card; // wild card joker
 }
+
+// In Indian Rummy, the whole Hand needs to be counted for points
+// unless there is at least one pure sequence without jokers.
+// This is called the Life.
+// The Life is excluded when counting points.
+// After than a second Sequence (with or without jokers)
+// is the next requirement. Once you have a second sequence,
+// all valid sets can be excluded from counting
+// In the representation below, only looseCards need to be counted for points
+// if looseCards is empty or contains just jokers it is a winning hand.
+// (Technically a LIfe is required, but is not possible to have 13 jokers unless
+// you have a crazy number of decks)
+//
+// MAKE INVALID STATES UNREPRESENTABLE
+// -----------------------------------
+// Keeping above in mind, we have a representation for Meld
+// that eliminates invalid states such as
+// having triplets without a second sequence, or a
+// a second sequence without a Life
+export interface IWithoutLifeMeld {
+    readonly wcJoker: Card; //wild card joker
+    readonly looseCards: readonly Card[];
+    readonly points: number;
+}
+export interface IWithLifeMeld extends IWithoutLifeMeld {
+    readonly life: ILife;
+}
+export interface IWith2ndSeqMeld extends IWithoutLifeMeld {
+    readonly seq2: ISequence;
+    readonly sequences: readonly ISequence[];
+    readonly looseCards: readonly Card[];
+}
+type Meld = IWithoutLifeMeld
 
 export type Pile = readonly Card[];
 

@@ -3,11 +3,11 @@
 import * as RA from 'fp-ts/lib/ReadonlyArray'
 import { pipe } from 'fp-ts/lib/function'
 import * as E from 'fp-ts/lib/Either'
-import { Hand, Rank, Suit } from './types';
-import { mkCard, strToCard } from './card';
-import { cardsInSequence, cardsInTriplet, enumerateMeldedHand, meldToJSON, mkLife, mkNominalMeldedHand, mkSequence, mkTriplet, mkWinningHand } from './meld';
+import { Hand, Rank, Suit } from '../types';
+import { mkCard, strToCard } from '../card';
+import { cardsInSequence, cardsInTriplet, enumerateMeldedHand, meldToJSON, mkLife, mkNominalMeldedHand, mkSequence, mkTriplet, mkWinningHand } from '../meld';
 import Debug from 'debug';
-import { checkIfWinningHand, solveHand } from './solving';
+import { checkIfWinningHand, solveHand } from '../solving';
 
 const debug = Debug('test:meld');
 

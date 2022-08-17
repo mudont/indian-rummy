@@ -1,6 +1,6 @@
 /* eslint-disable functional/no-return-void */
 /* eslint-disable functional/no-expression-statement */
-import * as C from "./combinatorics";
+import * as C from "../combinatorics";
 
 test("numericCartesianProduct", () => {
     const ncp = Array.from(C.numericCartesianProduct([2, 3]));
