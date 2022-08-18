@@ -1,9 +1,0 @@
-Make invalid states unrepresentable.
-
-Meld:
-  FullCountMeld or
-  WithLifeMeld
-     OnlyLifeMeld
-     With2ndSeqMeld or
-     
-     
