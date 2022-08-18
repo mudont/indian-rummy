@@ -1,4 +1,4 @@
-# rummy-core
+# indian-rummy
 :construction:
 
 A very early stage library to model the card game of [Indian Rummy](https://en.wikipedia.org/wiki/Indian_Rummy).
